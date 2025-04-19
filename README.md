@@ -1,6 +1,6 @@
-# Spark NWC
+# LNFly
 
-Multi-User NWC Wallet Service using Spark
+Lightning Fly - A platform to quickly create apps that you can earn through bitcoin lightning payments.
 
 ## Development
 
