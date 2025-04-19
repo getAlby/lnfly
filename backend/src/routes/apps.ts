@@ -193,6 +193,16 @@ async function executePromptAndUpdateDb(
       }
     }
 
+    const htmlStart = generatedHtml.indexOf("<html");
+    const htmlEnd = generatedHtml.indexOf("</html>");
+    if (htmlStart < 0 || htmlEnd < 0) {
+      throw new Error("Could not find HTML in generated response");
+    }
+    generatedHtml = generatedHtml.substring(
+      htmlStart,
+      htmlEnd + "</html>".length
+    );
+
     // Final Update DB on completion (after stream ends)
     await prisma.app.update({
       where: { id: appId },

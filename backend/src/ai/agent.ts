@@ -60,7 +60,9 @@ You know how to use bitcoin connect and lightning tools to accept payments:
     invoice: 'lnbc...',
     onPaid: (response) => {
       clearInterval(checkPaymentInterval);
-      // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
+      setTimeout(() => {
+        // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
+      }, 3000);
     },
     onCancelled: () => {
       clearInterval(checkPaymentInterval);
