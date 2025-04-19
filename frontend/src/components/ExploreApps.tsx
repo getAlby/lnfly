@@ -58,16 +58,15 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
     return <div className="text-red-500">Error: {appsError}</div>;
   }
 
-  if (completedApps.length === 0) {
-    return <div>No completed apps found.</div>;
-  }
-
   return (
     <div className="mt-32 w-full max-w-lg">
       {" "}
       {/* Added margin-top and width */}
       <h2 className="text-2xl font-bold mb-4">Explore Apps</h2>{" "}
       {/* Title outside the card */}
+      {completedApps.length === 0 && (
+        <div className="text-muted-foreground">No completed apps found.</div>
+      )}
       <ul className="space-y-4">
         {" "}
         {/* Added space between card items */}

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"; // Import useNavigate
 import Logo from "./assets/logo.svg";
 
 import ExploreApps from "@/components/ExploreApps"; // Import the new component
+import LNFlyHeading from "@/components/LNFlyHeading"; // Import the new component
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -43,8 +44,17 @@ function App() {
       }
 
       // Expecting { id: number } in the response
-      const result = await response.json();
+      const result = (await response.json()) as {
+        id: string;
+        editKey: string;
+        previewKey: string;
+      };
       console.log("API Response:", result);
+      window.localStorage.setItem(`app_${result.id}_editKey`, result.editKey);
+      window.localStorage.setItem(
+        `app_${result.id}_previewKey`,
+        result.previewKey
+      );
 
       if (result && typeof result.id === "number") {
         // Redirect to the app status page
@@ -74,10 +84,7 @@ function App() {
       />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
         {/* Add the heading here */}
-        <h1 className="text-4xl font-bold mt-16 mb-2">LNFly</h1>{" "}
-        <p className="mb-8 italic text-muted-foreground">
-          Earn bitcoin by building lightning apps with a single prompt
-        </p>
+        <LNFlyHeading />
         {/* Added heading */}
         {/* Form is now always visible */}
         <div className="w-full max-w-lg">

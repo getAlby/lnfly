@@ -19,4 +19,9 @@ export const suggestions: Suggestion[] = [
     prompt:
       "Make a simple tetris game but before you play you can choose from 3 themes. One is free (standard theme), one costs 21 sats (bitcoin theme), and one costs 42 sats (nostr theme). Controls should be just arrow keys (left/right arrows for movement, up arrow is rotate and down arrow is hard drop). If you lose, there should be a 'You Lose' screen with your score shown, and a button to play again, which you will be presented with the theme picker again.",
   },
+  {
+    title: "Amazing Button",
+    prompt:
+      "An app that has THE BUTTON. When you click it and pay the 21 sat fee, all sorts of amazing things happen, like fireworks and so forth.",
+  },
 ];

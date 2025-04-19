@@ -1,3 +1,4 @@
+import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
 import { Button } from "@/components/ui/button"; // Import Button
 import {
   Card,
@@ -6,8 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"; // Import Card components
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 // Define the expected structure of the app data from the API
 interface AppData {
@@ -18,6 +20,7 @@ interface AppData {
   numChars: number;
   createdAt: string;
   updatedAt: string;
+  published: boolean;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
@@ -29,54 +32,106 @@ function AppStatusPage() {
   const [error, setError] = useState<string | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
 
-  const fetchStatus = async (isInitialLoad = false) => {
-    if (!isInitialLoad && !isLoading) setIsLoading(true); // Show loading indicator on subsequent polls unless already loading
-    if (isInitialLoad) setError(null); // Clear error on initial load attempt
+  const editKey = window.localStorage.getItem(`app_${id}_editKey`);
+  const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
+
+  const publishApp = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot publish: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+    if (!confirm("By publishing your app will be visible on the home page.")) {
+      return;
+    }
 
     try {
-      const response = await fetch(`/api/apps/${id}`);
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ published: true }),
+      });
+
       if (!response.ok) {
-        // Stop polling on 404 Not Found
-        if (response.status === 404) {
-          setError(`App with ID ${id} not found.`);
-          if (intervalRef.current) clearInterval(intervalRef.current);
-          return; // Exit fetch function
-        }
         const errorText = await response.text();
         throw new Error(
-          `HTTP error! status: ${response.status} - ${
-            errorText || "Failed to fetch status."
+          `Failed to publish app: ${response.status} - ${
+            errorText || response.statusText
           }`
         );
       }
-      const data: AppData = await response.json();
-      setAppData(data);
-      setError(null); // Clear error on successful fetch
 
-      // Stop polling if the process is finished (completed or failed)
-      if (data.state === "COMPLETED" || data.state === "FAILED") {
-        if (intervalRef.current) {
-          console.log(`Polling stopped for App ${id}, state: ${data.state}`);
-          clearInterval(intervalRef.current);
-          intervalRef.current = null;
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch app status:", err);
-      // Don't set error state on polling errors unless it's the initial load,
-      // to avoid flickering UI if there's a temporary network issue.
-      // Keep polling unless it's a fatal error like 404 handled above.
-      if (isInitialLoad) {
-        setError(
-          err instanceof Error ? err.message : "An unknown error occurred."
-        );
-      }
-    } finally {
-      // Only set loading to false if it was set to true for this fetch
-      setIsLoading(false);
+      // App published successfully, refetch status to update UI
+      toast(`App ${id} published successfully.`);
+      fetchStatus(); // Refetch status to update the UI
+    } catch (error) {
+      console.error("Error publishing app:", error);
+      alert(
+        `Error publishing app: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
     }
   };
 
+  const fetchStatus = useCallback(
+    async (isInitialLoad = false) => {
+      if (!isInitialLoad && !isLoading) setIsLoading(true); // Show loading indicator on subsequent polls unless already loading
+      if (isInitialLoad) setError(null); // Clear error on initial load attempt
+
+      try {
+        const response = await fetch(`/api/apps/${id}?editKey=${editKey}`);
+        if (!response.ok) {
+          // Stop polling on 404 Not Found
+          if (response.status === 404) {
+            setError(`App with ID ${id} not found.`);
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            return; // Exit fetch function
+          }
+          const errorText = await response.text();
+          throw new Error(
+            `HTTP error! status: ${response.status} - ${
+              errorText || "Failed to fetch status."
+            }`
+          );
+        }
+        const data: AppData = await response.json();
+        if (data.state === "COMPLETED" && appData?.state === "GENERATING") {
+          toast("App ready!");
+        }
+        setAppData(data);
+        setError(null); // Clear error on successful fetch
+
+        // Stop polling if the process is finished (completed or failed)
+        if (data.state === "COMPLETED" || data.state === "FAILED") {
+          if (intervalRef.current) {
+            console.log(`Polling stopped for App ${id}, state: ${data.state}`);
+            clearInterval(intervalRef.current);
+            intervalRef.current = null;
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch app status:", err);
+        // Don't set error state on polling errors unless it's the initial load,
+        // to avoid flickering UI if there's a temporary network issue.
+        // Keep polling unless it's a fatal error like 404 handled above.
+        if (isInitialLoad) {
+          setError(
+            err instanceof Error ? err.message : "An unknown error occurred."
+          );
+        }
+      } finally {
+        // Only set loading to false if it was set to true for this fetch
+        setIsLoading(false);
+      }
+    },
+    [id, isLoading]
+  );
+
+  const shouldPoll =
+    appData?.state === "GENERATING" || appData?.state === "INITIALIZING";
   useEffect(() => {
     if (!id) {
       setError("No App ID provided.");
@@ -91,10 +146,7 @@ function AppStatusPage() {
     // We check appData state inside the interval callback as well
     intervalRef.current = setInterval(() => {
       // Check state *before* fetching again
-      if (
-        appData &&
-        (appData.state === "COMPLETED" || appData.state === "FAILED")
-      ) {
+      if (!shouldPoll) {
         if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
       } else {
@@ -110,7 +162,7 @@ function AppStatusPage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [id]); // Rerun effect if ID changes
+  }, [fetchStatus, id, shouldPoll]); // Rerun effect if ID changes
 
   // --- Render Logic ---
 
@@ -132,77 +184,111 @@ function AppStatusPage() {
   // Determine status display and button state
   let statusMessage: string; // Explicitly type as string
   let statusColor = "text-gray-600";
-  let buttonDisabled = true;
-  let buttonText = "View App (Processing...)"; // Default button text
+
+  const buttonDisabled =
+    appData.state !== "COMPLETED" || (!appData.published && !previewKey);
 
   // Set display strings/styles based on the actual state
   switch (appData.state) {
     case "INITIALIZING":
       statusMessage = "Initializing...";
       statusColor = "text-yellow-600";
-      buttonText = "View App (Initializing...)";
       break;
     case "GENERATING":
       statusMessage = "Generating...";
       statusColor = "text-blue-600 animate-pulse"; // Add pulse animation
-      buttonText = "View App (Generating...)";
       break;
     case "COMPLETED":
       statusMessage = "Completed";
       statusColor = "text-green-600";
-      buttonDisabled = false; // Enable button only on success
-      buttonText = "View App";
       break;
     case "FAILED":
       statusMessage = "Failed";
       statusColor = "text-red-600";
-      buttonText = "Generation Failed"; // Update button text for failure
       break;
   }
 
   return (
-    <div className="container mx-auto p-4 max-w-2xl">
-      {" "}
-      {/* Center content */}
-      <Card>
-        <CardHeader>
-          <CardTitle>App Status</CardTitle>
-          <CardDescription>Status for App ID: {appData.id}</CardDescription>
-          {/* Display error alongside data if polling fails temporarily */}
-          {error && (
-            <p className="text-sm text-red-500 mt-2">Warning: {error}</p>
-          )}
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            <p>
-              Status:{" "}
-              <span className={`font-semibold ${statusColor}`}>
-                {statusMessage}
-              </span>
-            </p>
-            <p>Characters Generated: {appData.numChars.toLocaleString()}</p>
-            {/* Progress component removed */}
-            <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
-            <p>Last Update: {new Date(appData.updatedAt).toLocaleString()}</p>
-          </div>
+    <div className="font-sans flex flex-col items-center min-h-screen py-8 px-4">
+      <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
+        <LNFlyHeading />
+        <div className="container mx-auto p-4 max-w-2xl">
+          {" "}
+          {/* Center content */}
+          <Card>
+            <CardHeader>
+              <CardTitle>App {appData.id}</CardTitle>
+              <CardDescription>Status for App ID: {appData.id}</CardDescription>
+              {/* Display error alongside data if polling fails temporarily */}
+              {error && (
+                <p className="text-sm text-red-500 mt-2">Warning: {error}</p>
+              )}
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p>
+                  Status:{" "}
+                  <span className={`font-semibold ${statusColor}`}>
+                    {statusMessage}
+                  </span>
+                </p>
+                <p>
+                  Published:{" "}
+                  <span
+                    className={`font-semibold ${
+                      appData.published ? "text-green-500" : "text-gray-500"
+                    }`}
+                  >
+                    {appData.published.toString()}
+                  </span>
+                </p>
+                {!!appData.numChars && (
+                  <p>
+                    Characters Generated: {appData.numChars.toLocaleString()}
+                  </p>
+                )}
+                {/* Progress component removed */}
+                <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
+                <p>
+                  Last Update: {new Date(appData.updatedAt).toLocaleString()}
+                </p>
+              </div>
 
-          <Button
-            asChild // Use asChild to render an anchor tag
-            disabled={buttonDisabled}
-            className="mt-4 w-full" // Make button full width
-            size="lg" // Make button larger
-          >
-            <a
-              href={`/api/apps/${id}/view`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {buttonText}
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
+              {appData.state === "COMPLETED" && (
+                <a
+                  href={
+                    buttonDisabled
+                      ? "#"
+                      : `/api/apps/${id}/view${
+                          appData.published ? "" : `?previewKey=${previewKey}`
+                        }`
+                  }
+                >
+                  <Button
+                    disabled={buttonDisabled}
+                    className="mt-4 w-full" // Make button full width
+                    size="lg" // Make button larger
+                  >
+                    {appData.published ? "View app" : "Preview unpublished app"}
+                  </Button>
+                </a>
+              )}
+              {!appData.published &&
+                appData.state === "COMPLETED" &&
+                editKey && (
+                  <Button
+                    disabled={buttonDisabled}
+                    className="mt-4 w-full" // Make button full width
+                    size="lg" // Make button larger
+                    onClick={publishApp}
+                  >
+                    Publish app
+                  </Button>
+                )}
+            </CardContent>
+          </Card>
+        </div>
+      </main>
     </div>
   );
 }

@@ -18,6 +18,10 @@ model App {
   numChars  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  published Boolean @default(false)
+  lightningAddress String?
+  editKey String @default(uuid())
+  previewKey String @default(uuid())
 }
 
 enum AppState {

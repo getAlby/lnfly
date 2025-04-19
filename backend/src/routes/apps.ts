@@ -49,7 +49,7 @@ async function appRoutes(
         let apps: AppListItem[]; // Explicitly type the apps variable
         if (status === "completed") {
           apps = await prisma.app.findMany({
-            where: { state: AppState.COMPLETED },
+            where: { state: AppState.COMPLETED, published: true },
             select: {
               // Select only necessary fields for the list view
               id: true,
@@ -100,12 +100,17 @@ async function appRoutes(
             prompt: prompt,
             state: AppState.INITIALIZING, // Use Enum
           },
+          select: {
+            id: true,
+            editKey: true,
+            previewKey: true,
+          },
         });
 
         fastify.log.info(`Created new app record with ID: ${app.id}`);
 
         // 2. Return App ID immediately
-        reply.code(202).send({ id: app.id }); // 202 Accepted
+        reply.code(202).send(app); // 202 Accepted
 
         // 3. Start generation in the background (fire and forget)
         // We don't await this promise
@@ -127,15 +132,82 @@ async function appRoutes(
   );
 
   // Route to get app status
-  fastify.get<{ Params: { id: string } }>("/:id", async (request, reply) => {
+  fastify.get<{ Params: { id: string }; Querystring: { editKey?: string } }>(
+    "/:id",
+    async (request, reply) => {
+      const { id } = request.params;
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+
+      try {
+        const app = await prisma.app.findUnique({
+          where: { id: appId },
+        });
+
+        if (!app) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+
+        const appResponse = {
+          id: app.id,
+          createdAt: app.createdAt,
+          updatedAt: app.updatedAt,
+          state: app.state,
+          published: app.published,
+          ...(app.published || request.query.editKey === app.editKey
+            ? {
+                html: app.html,
+                lightningAddress: app.lightningAddress,
+                prompt: app.prompt,
+                numChars: app.numChars,
+                title: app.title,
+              }
+            : {}),
+        };
+
+        return reply.send(appResponse);
+      } catch (error) {
+        fastify.log.error(error, `Failed to fetch app status for ID: ${appId}`);
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+
+  // Define the expected body structure for updating an app
+  interface UpdateAppBody {
+    published?: boolean;
+    // Add other updatable fields here later
+  }
+
+  // Route to update an app (e.g., publish)
+  fastify.put<{
+    Params: { id: string };
+    Querystring: { editKey?: string };
+    Body: UpdateAppBody;
+  }>("/:id", async (request, reply) => {
     const { id } = request.params;
+    const { editKey } = request.query;
+    const { published } = request.body;
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
       return reply.code(400).send({ message: "Invalid App ID format." });
     }
 
+    if (!editKey) {
+      return reply.code(401).send({ message: "Edit key is required." });
+    }
+
+    // Ensure at least one updatable field is provided
+    if (published === undefined) {
+      return reply.code(400).send({ message: "No updatable fields provided." });
+    }
+
     try {
+      // Find the app and validate the edit key
       const app = await prisma.app.findUnique({
         where: { id: appId },
       });
@@ -144,18 +216,41 @@ async function appRoutes(
         return reply.code(404).send({ message: "App not found." });
       }
 
-      return reply.send(app);
+      if (editKey !== app.editKey) {
+        return reply.code(403).send({ message: "Invalid edit key." });
+      }
+
+      // Update the app with the provided data
+      const updatedApp = await prisma.app.update({
+        where: { id: appId },
+        data: {
+          published: published,
+          // Add other updatable fields here later
+        },
+        select: {
+          id: true,
+          published: true,
+          // Select other fields to return if needed
+        },
+      });
+
+      fastify.log.info(
+        `App ${appId} updated. Published: ${updatedApp.published}`
+      );
+
+      return reply.send(updatedApp);
     } catch (error) {
-      fastify.log.error(error, `Failed to fetch app status for ID: ${appId}`);
+      fastify.log.error(error, `Failed to update app for ID: ${appId}`);
       return reply.code(500).send({ message: "Internal Server Error." });
     }
   });
 
   // Route to view generated HTML
-  fastify.get<{ Params: { id: string } }>(
+  fastify.get<{ Params: { id: string }; Querystring: { previewKey?: string } }>(
     "/:id/view",
     async (request, reply) => {
       const { id } = request.params;
+      const { previewKey } = request.query;
       const appId = parseInt(id, 10);
 
       if (isNaN(appId)) {
@@ -175,6 +270,13 @@ async function appRoutes(
           // Maybe return a placeholder or status page instead?
           return reply.code(400).send({
             message: `App generation not complete. Current state: ${app.state}`,
+          });
+        }
+
+        if (!app.published && previewKey !== app.previewKey) {
+          // Maybe return a placeholder or status page instead?
+          return reply.code(400).send({
+            message: `App is not published`,
           });
         }
 
