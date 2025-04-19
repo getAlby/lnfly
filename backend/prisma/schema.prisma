@@ -1,0 +1,28 @@
+// backend/prisma/schema.prisma
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model App {
+  id        Int      @id @default(autoincrement())
+  title     String?
+  prompt    String
+  html      String?
+  state     AppState @default(INITIALIZING)
+  numChars  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum AppState {
+  INITIALIZING
+  GENERATING
+  COMPLETED
+  FAILED
+}

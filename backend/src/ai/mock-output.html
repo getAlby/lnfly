@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snake Game - Pay to Continue</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #f0f0f0;
+        margin: 0;
+        padding: 20px;
+      }
+      h1 {
+        color: #2c3e50;
+        margin-bottom: 10px;
+      }
+      #game-container {
+        position: relative;
+      }
+      canvas {
+        background-color: #ecf0f1;
+        border: 2px solid #2c3e50;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      #score-display {
+        font-size: 20px;
+        margin: 10px 0;
+        color: #2c3e50;
+      }
+      #game-over {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+      }
+      #game-over h2 {
+        font-size: 36px;
+        margin-bottom: 20px;
+      }
+      #continue-options {
+        display: flex;
+        gap: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 18px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.3s;
+      }
+      #restart-btn {
+        background-color: #2ecc71;
+        color: white;
+      }
+      #restart-btn:hover {
+        background-color: #27ae60;
+      }
+      #pay-btn {
+        background-color: #3498db;
+        color: white;
+      }
+      #pay-btn:hover {
+        background-color: #2980b9;
+      }
+      #payment-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: none;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      #payment-content {
+        background-color: white;
+        padding: 20px;
+        border-radius: 10px;
+        max-width: 500px;
+        text-align: center;
+      }
+      #close-payment {
+        margin-top: 20px;
+        background-color: #e74c3c;
+        color: white;
+      }
+      #close-payment:hover {
+        background-color: #c0392b;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Snake Game</h1>
+    <div id="score-display">Score: 0</div>
+    <div id="game-container">
+      <canvas id="game-canvas" width="400" height="400"></canvas>
+      <div id="game-over">
+        <h2>Game Over!</h2>
+        <p id="final-score">Your score: 0</p>
+        <div id="continue-options">
+          <button id="restart-btn">Restart (Free)</button>
+          <button id="pay-btn">Continue (Pay 10 sats)</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="payment-modal">
+      <div id="payment-content">
+        <h2>Pay to Continue</h2>
+        <p>
+          Scan this QR code or click the button below to pay 10 sats and
+          continue your game.
+        </p>
+        <div id="payment-qr"></div>
+        <button id="close-payment">Close</button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { launchPaymentModal } from "https://esm.sh/@getalby/bitcoin-connect@3.7.0";
+      import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
+
+      const canvas = document.getElementById("game-canvas");
+      const ctx = canvas.getContext("2d");
+      const scoreDisplay = document.getElementById("score-display");
+      const gameOverScreen = document.getElementById("game-over");
+      const finalScoreDisplay = document.getElementById("final-score");
+      const restartBtn = document.getElementById("restart-btn");
+      const payBtn = document.getElementById("pay-btn");
+      const paymentModal = document.getElementById("payment-modal");
+      const closePaymentBtn = document.getElementById("close-payment");
+
+      const gridSize = 20;
+      const tileCount = canvas.width / gridSize;
+      let snake = [];
+      let food = {};
+      let direction = "right";
+      let nextDirection = "right";
+      let score = 0;
+      let gameSpeed = 100;
+      let gameLoop;
+      let savedSnake = [];
+      let savedScore = 0;
+      let savedDirection = "right";
+
+      function initGame() {
+        snake = [
+          { x: 5, y: 10 },
+          { x: 4, y: 10 },
+          { x: 3, y: 10 },
+        ];
+        direction = "right";
+        nextDirection = "right";
+        score = 0;
+        gameSpeed = 100;
+        generateFood();
+        updateScore();
+        gameOverScreen.style.display = "none";
+      }
+
+      function generateFood() {
+        food = {
+          x: Math.floor(Math.random() * tileCount),
+          y: Math.floor(Math.random() * tileCount),
+        };
+
+        // Make sure food doesn't appear on snake
+        for (let i = 0; i < snake.length; i++) {
+          if (food.x === snake[i].x && food.y === snake[i].y) {
+            generateFood();
+            return;
+          }
+        }
+      }
+
+      function drawSnake() {
+        for (let i = 0; i < snake.length; i++) {
+          ctx.fillStyle = i === 0 ? "#2ecc71" : "#27ae60";
+          ctx.fillRect(
+            snake[i].x * gridSize,
+            snake[i].y * gridSize,
+            gridSize,
+            gridSize
+          );
+
+          ctx.strokeStyle = "#fff";
+          ctx.strokeRect(
+            snake[i].x * gridSize,
+            snake[i].y * gridSize,
+            gridSize,
+            gridSize
+          );
+        }
+      }
+
+      function drawFood() {
+        ctx.fillStyle = "#e74c3c";
+        ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize, gridSize);
+      }
+
+      function moveSnake() {
+        direction = nextDirection;
+
+        const head = { x: snake[0].x, y: snake[0].y };
+
+        switch (direction) {
+          case "up":
+            head.y--;
+            break;
+          case "down":
+            head.y++;
+            break;
+          case "left":
+            head.x--;
+            break;
+          case "right":
+            head.x++;
+            break;
+        }
+
+        // Check collision with walls
+        if (
+          head.x < 0 ||
+          head.x >= tileCount ||
+          head.y < 0 ||
+          head.y >= tileCount
+        ) {
+          gameOver();
+          return;
+        }
+
+        // Check collision with self
+        for (let i = 0; i < snake.length; i++) {
+          if (head.x === snake[i].x && head.y === snake[i].y) {
+            gameOver();
+            return;
+          }
+        }
+
+        snake.unshift(head);
+
+        // Check if snake ate food
+        if (head.x === food.x && head.y === food.y) {
+          score++;
+          updateScore();
+
+          // Increase speed every 5 points
+          if (score % 5 === 0 && gameSpeed > 50) {
+            gameSpeed -= 5;
+          }
+
+          generateFood();
+        } else {
+          snake.pop();
+        }
+      }
+
+      function updateScore() {
+        scoreDisplay.textContent = `Score: ${score}`;
+      }
+
+      function gameOver() {
+        clearInterval(gameLoop);
+        savedSnake = [...snake];
+        savedScore = score;
+        savedDirection = direction;
+        finalScoreDisplay.textContent = `Your score: ${score}`;
+        gameOverScreen.style.display = "flex";
+      }
+
+      function gameTick() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawSnake();
+        drawFood();
+        moveSnake();
+      }
+
+      function startGame() {
+        initGame();
+        gameLoop = setInterval(gameTick, gameSpeed);
+      }
+
+      function continueGame() {
+        snake = [...savedSnake];
+        score = savedScore;
+        direction = savedDirection;
+        nextDirection = savedDirection;
+        updateScore();
+        gameOverScreen.style.display = "none";
+        gameLoop = setInterval(gameTick, gameSpeed);
+      }
+
+      document.addEventListener("keydown", (e) => {
+        switch (e.key) {
+          case "ArrowUp":
+            if (direction !== "down") nextDirection = "up";
+            break;
+          case "ArrowDown":
+            if (direction !== "up") nextDirection = "down";
+            break;
+          case "ArrowLeft":
+            if (direction !== "right") nextDirection = "left";
+            break;
+          case "ArrowRight":
+            if (direction !== "left") nextDirection = "right";
+            break;
+        }
+      });
+
+      restartBtn.addEventListener("click", startGame);
+
+      payBtn.addEventListener("click", async () => {
+        paymentModal.style.display = "flex";
+
+        const ln = new LightningAddress("rolznzfra@getalby.com");
+        await ln.fetch();
+        const invoice = await ln.requestInvoice({ satoshi: 10 });
+
+        const { setPaid } = launchPaymentModal({
+          invoice: invoice.paymentRequest,
+          onPaid: (response) => {
+            clearInterval(checkPaymentInterval);
+            paymentModal.style.display = "none";
+            continueGame();
+          },
+          onCancelled: () => {
+            clearInterval(checkPaymentInterval);
+            paymentModal.style.display = "none";
+          },
+        });
+
+        const checkPaymentInterval = setInterval(async () => {
+          const paid = await invoice.verifyPayment();
+
+          if (paid && invoice.preimage) {
+            setPaid({
+              preimage: invoice.preimage,
+            });
+          }
+        }, 1000);
+      });
+
+      closePaymentBtn.addEventListener("click", () => {
+        paymentModal.style.display = "none";
+      });
+
+      // Start the game
+      startGame();
+    </script>
+  </body>
+</html>
