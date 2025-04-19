@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 import Logo from "./assets/logo.svg";
 
+import ExploreApps from "@/components/ExploreApps"; // Import the new component
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingButton } from "@/components/ui/loading-button";
@@ -72,6 +73,12 @@ function App() {
         className="w-screen h-screen object-cover fixed top-0 left-0 -z-10 opacity-50 object-center"
       />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
+        {/* Add the heading here */}
+        <h1 className="text-4xl font-bold mt-16 mb-2">LNFly</h1>{" "}
+        <p className="mb-8 italic text-muted-foreground">
+          Earn bitcoin by building lightning apps with a single prompt
+        </p>
+        {/* Added heading */}
         {/* Form is now always visible */}
         <div className="w-full max-w-lg">
           <Card className="w-full">
@@ -125,6 +132,9 @@ function App() {
           </div>
         )}
         {/* Removed iframe display */}
+        {/* Add the ExploreApps component here */}
+        <ExploreApps onFork={setPrompt} />{" "}
+        {/* Pass setPrompt as the onFork prop */}
       </main>
     </div>
   );

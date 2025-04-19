@@ -23,6 +23,61 @@ async function appRoutes(
     prompt: string;
   }
 
+  // Define the expected querystring structure for getting apps
+  interface GetAppsQuerystring {
+    status?: string;
+  }
+
+  // Define the expected structure of app items returned in the list
+  interface AppListItem {
+    id: number;
+    prompt: string;
+    state: AppState;
+    // Add other fields if selected in the prisma query
+  }
+
+  // Route to get a list of apps with optional filtering
+  fastify.get<{ Querystring: GetAppsQuerystring; Reply: AppListItem[] }>(
+    "/",
+    async (
+      request: FastifyRequest<{ Querystring: GetAppsQuerystring }>,
+      reply: FastifyReply
+    ) => {
+      const { status } = request.query;
+
+      try {
+        let apps: AppListItem[]; // Explicitly type the apps variable
+        if (status === "completed") {
+          apps = await prisma.app.findMany({
+            where: { state: AppState.COMPLETED },
+            select: {
+              // Select only necessary fields for the list view
+              id: true,
+              prompt: true,
+              state: true,
+              // Include other fields if needed in the list view
+            },
+          });
+        } else {
+          // For now, if status is not 'completed', return an empty array or handle other statuses later
+          // Or, you could return all apps:
+          // apps = await prisma.app.findMany();
+          apps = []; // Returning empty array for now if status is not 'completed'
+        }
+
+        return reply.send(apps);
+      } catch (error) {
+        fastify.log.error(error, `Failed to fetch apps with status: ${status}`);
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+
+  // Define the expected body structure for creating an app
+  interface CreateAppBody {
+    prompt: string;
+  }
+
   // Route to create a new app
   fastify.post<{ Body: CreateAppBody }>(
     "/",
