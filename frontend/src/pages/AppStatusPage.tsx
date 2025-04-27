@@ -24,6 +24,7 @@ interface AppData {
   state: "INITIALIZING" | "GENERATING" | "COMPLETED" | "FAILED";
   numChars?: number;
   prompt?: string;
+  errorMessage?: string;
   createdAt: string;
   updatedAt: string;
   published: boolean;
@@ -311,6 +312,9 @@ function AppStatusPage() {
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
                     {statusMessage}
+                    {appData.state === "FAILED" && !!appData.errorMessage && (
+                      <span className="text-sm">: {appData.errorMessage}</span>
+                    )}
                   </span>
                 </p>
                 <p>

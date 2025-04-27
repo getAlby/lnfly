@@ -157,6 +157,11 @@ async function appRoutes(
           updatedAt: app.updatedAt,
           state: app.state,
           published: app.published,
+          ...(request.query.editKey === app.editKey
+            ? {
+                errorMessage: app.errorMessage,
+              }
+            : {}),
           ...(app.published || request.query.editKey === app.editKey
             ? {
                 html: app.html,
@@ -382,15 +387,21 @@ async function executePromptAndUpdateDb(
     });
     fastify.log.info(`App ${appId} generation COMPLETED.`);
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     fastify.log.error(error, `Failed generation for app ID: ${appId}`);
     // Update DB on failure
     try {
       await prisma.app.update({
         where: { id: appId },
         // Keep potentially partially generated numChars when failing
-        data: { state: AppState.FAILED },
+        data: {
+          state: AppState.FAILED,
+          errorMessage: errorMessage.substring(0, 1000), // Store error message (truncated if needed)
+        },
       });
-      fastify.log.info(`App ${appId} state changed to FAILED.`);
+      fastify.log.info(
+        `App ${appId} state changed to FAILED. Error: ${errorMessage}`
+      );
     } catch (dbError) {
       fastify.log.error(
         dbError,

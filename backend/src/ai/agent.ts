@@ -92,6 +92,12 @@ Here are the rules you MUST follow.
 - No md file syntax (e.g. html\`\`\`...\`\`\` ).
 `,
       prompt,
+      onError: (event) => {
+        throw new Error(
+          "got an error while generating: " +
+            ((event.error as any)?.responseBody || "unknown")
+        );
+      },
     });
     // Yield each part of the stream as it comes in
     yield* textStream;

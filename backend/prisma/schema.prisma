@@ -22,6 +22,7 @@ model App {
   lightningAddress String?
   editKey String @default(uuid())
   previewKey String @default(uuid())
+  errorMessage String? // Add field to store error messages
 }
 
 enum AppState {
