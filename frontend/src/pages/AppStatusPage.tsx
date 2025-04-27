@@ -7,6 +7,9 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"; // Import Card components
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { InfoIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -21,6 +24,7 @@ interface AppData {
   createdAt: string;
   updatedAt: string;
   published: boolean;
+  lightningAddress?: string | null;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
@@ -30,6 +34,8 @@ function AppStatusPage() {
   const [appData, setAppData] = useState<AppData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lightningAddress, setLightningAddress] = useState("");
+  const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
@@ -54,7 +60,9 @@ function AppStatusPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ published }),
+        body: JSON.stringify({
+          published,
+        }),
       });
 
       if (!response.ok) {
@@ -75,6 +83,52 @@ function AppStatusPage() {
       console.error("Error publishing app:", error);
       alert(
         `Error publishing app: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
+  const setLightningAddressHandler = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot set address: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+    // Basic validation (optional: add more robust validation)
+    if (!lightningAddress || !lightningAddress.includes("@")) {
+      alert(
+        "Please enter a valid Lightning Address (e.g., yourname@getalby.com)."
+      );
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ lightningAddress }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to set Lightning Address: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      const updatedAppData = await response.json();
+      setAppData(updatedAppData); // Update local state with full response
+      setLightningAddress(updatedAppData.lightningAddress || ""); // Ensure input reflects saved state
+      toast(`Lightning Address updated successfully.`);
+    } catch (error) {
+      console.error("Error setting Lightning Address:", error);
+      alert(
+        `Error setting Lightning Address: ${
           error instanceof Error ? error.message : "An unknown error occurred."
         }`
       );
@@ -107,6 +161,7 @@ function AppStatusPage() {
           toast("App ready!");
         }
         setAppData(data);
+        setLightningAddress(data.lightningAddress || ""); // Initialize input with fetched data
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
@@ -259,6 +314,30 @@ function AppStatusPage() {
                 </p>
               </div>
 
+              {/* Lightning Address Input */}
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center">
+                  <Label htmlFor="lightning-address">Lightning Address</Label>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    onClick={() => setShowLearnMoreModal(true)}
+                  >
+                    <InfoIcon className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                <div className="flex gap-2">
+                  <Input
+                    id="lightning-address"
+                    placeholder="yourname@getalby.com"
+                    value={lightningAddress}
+                    onChange={(e) => setLightningAddress(e.target.value)}
+                  />
+                  <Button onClick={setLightningAddressHandler}>Set</Button>
+                </div>
+              </div>
+
               {appData.state === "COMPLETED" && (
                 <a
                   href={
@@ -307,6 +386,48 @@ function AppStatusPage() {
           </Card>
         </div>
       </main>
+      {/* Learn More Modal */}
+      {showLearnMoreModal && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">
+              What is a Lightning Address?
+            </h3>
+            <p className="mb-4">
+              Set your lightning address to earn when users pay within your app.
+              You can get a lightning address at:
+            </p>
+            <ul className="list-disc list-inside mb-4">
+              <li>
+                <a
+                  href="https://getalby.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://getalby.com
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://coinos.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://coinos.io
+                </a>
+              </li>
+            </ul>
+            <Button
+              onClick={() => setShowLearnMoreModal(false)}
+              className="w-full"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

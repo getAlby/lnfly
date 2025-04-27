@@ -179,6 +179,7 @@ async function appRoutes(
   // Define the expected body structure for updating an app
   interface UpdateAppBody {
     published?: boolean;
+    lightningAddress?: string;
     // Add other updatable fields here later
   }
 
@@ -190,7 +191,7 @@ async function appRoutes(
   }>("/:id", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { published } = request.body;
+    const { published, lightningAddress } = request.body;
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -202,7 +203,7 @@ async function appRoutes(
     }
 
     // Ensure at least one updatable field is provided
-    if (published === undefined) {
+    if (published === undefined && !lightningAddress) {
       return reply.code(400).send({ message: "No updatable fields provided." });
     }
 
@@ -224,12 +225,14 @@ async function appRoutes(
       const updatedApp = await prisma.app.update({
         where: { id: appId },
         data: {
-          published: published,
+          published,
+          lightningAddress,
           // Add other updatable fields here later
         },
         select: {
           id: true,
           published: true,
+          lightningAddress: true,
           // Select other fields to return if needed
         },
       });
@@ -288,7 +291,14 @@ async function appRoutes(
         }
 
         // Send the HTML content
-        return reply.type("text/html").send(app.html);
+        let htmlWithLightningAddress = app.html;
+        if (app.lightningAddress) {
+          htmlWithLightningAddress = htmlWithLightningAddress.replaceAll(
+            "rolznzfra@getalby.com",
+            app.lightningAddress
+          );
+        }
+        return reply.type("text/html").send(htmlWithLightningAddress);
       } catch (error) {
         fastify.log.error(error, `Failed to fetch app view for ID: ${appId}`);
         return reply.code(500).send({ message: "Internal Server Error." });
