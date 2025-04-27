@@ -80,7 +80,7 @@ function App() {
       <img
         src={Logo}
         alt="LNFly Logo"
-        className="w-screen h-screen object-cover fixed top-0 left-0 -z-10 opacity-50 object-center"
+        className="w-screen h-screen object-cover fixed top-0 left-0 -z-10 opacity-15 object-center "
       />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
         {/* Add the heading here */}

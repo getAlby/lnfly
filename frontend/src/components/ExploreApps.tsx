@@ -93,6 +93,13 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                 <div className="flex gap-2 justify-end">
                   {" "}
                   {/* Right-align buttons */}
+                  {window.localStorage.getItem(`app_${app.id}_editKey`) && (
+                    <a href={`/apps/${app.id}`} target="_blank">
+                      <Button size="sm" variant="destructive">
+                        Manage
+                      </Button>
+                    </a>
+                  )}
                   <a href={`/api/apps/${app.id}/view`} target="_blank">
                     <Button size="sm">View</Button>
                   </a>

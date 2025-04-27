@@ -35,13 +35,16 @@ function AppStatusPage() {
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
 
-  const publishApp = async () => {
+  const setAppPublished = async (published: boolean) => {
     if (!id || !editKey) {
       console.error("Cannot publish: Missing App ID or edit key.");
       alert("Error: Missing App ID or edit key.");
       return;
     }
-    if (!confirm("By publishing your app will be visible on the home page.")) {
+    if (
+      published &&
+      !confirm("By publishing your app will be visible on the home page.")
+    ) {
       return;
     }
 
@@ -51,7 +54,7 @@ function AppStatusPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ published: true }),
+        body: JSON.stringify({ published }),
       });
 
       if (!response.ok) {
@@ -64,7 +67,9 @@ function AppStatusPage() {
       }
 
       // App published successfully, refetch status to update UI
-      toast(`App ${id} published successfully.`);
+      toast(
+        `App ${id} ${published ? "published" : "unpublished"} successfully.`
+      );
       fetchStatus(); // Refetch status to update the UI
     } catch (error) {
       console.error("Error publishing app:", error);
@@ -127,7 +132,7 @@ function AppStatusPage() {
         setIsLoading(false);
       }
     },
-    [id, isLoading]
+    [appData?.state, editKey, id, isLoading]
   );
 
   const shouldPoll =
@@ -280,9 +285,22 @@ function AppStatusPage() {
                     disabled={buttonDisabled}
                     className="mt-4 w-full" // Make button full width
                     size="lg" // Make button larger
-                    onClick={publishApp}
+                    onClick={() => setAppPublished(true)}
                   >
                     Publish app
+                  </Button>
+                )}
+              {appData.published &&
+                appData.state === "COMPLETED" &&
+                editKey && (
+                  <Button
+                    disabled={buttonDisabled}
+                    variant="destructive"
+                    className="mt-4 w-full" // Make button full width
+                    size="lg" // Make button larger
+                    onClick={() => setAppPublished(false)}
+                  >
+                    Unpublish app
                   </Button>
                 )}
             </CardContent>
