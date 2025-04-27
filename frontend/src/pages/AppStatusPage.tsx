@@ -9,7 +9,9 @@ import {
 } from "@/components/ui/card"; // Import Card components
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { InfoIcon } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { copyToClipboard } from "@/lib/clipboard";
+import { CopyIcon, InfoIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -20,7 +22,8 @@ interface AppData {
   title: string | null;
   // prompt: string; // We might not need the full prompt here
   state: "INITIALIZING" | "GENERATING" | "COMPLETED" | "FAILED";
-  numChars: number;
+  numChars?: number;
+  prompt?: string;
   createdAt: string;
   updatedAt: string;
   published: boolean;
@@ -89,7 +92,7 @@ function AppStatusPage() {
     }
   };
 
-  const setLightningAddressHandler = async () => {
+  const saveLightningAddress = async () => {
     if (!id || !editKey) {
       console.error("Cannot set address: Missing App ID or edit key.");
       alert("Error: Missing App ID or edit key.");
@@ -121,9 +124,6 @@ function AppStatusPage() {
         );
       }
 
-      const updatedAppData = await response.json();
-      setAppData(updatedAppData); // Update local state with full response
-      setLightningAddress(updatedAppData.lightningAddress || ""); // Ensure input reflects saved state
       toast(`Lightning Address updated successfully.`);
     } catch (error) {
       console.error("Error setting Lightning Address:", error);
@@ -161,7 +161,9 @@ function AppStatusPage() {
           toast("App ready!");
         }
         setAppData(data);
-        setLightningAddress(data.lightningAddress || ""); // Initialize input with fetched data
+        if (!lightningAddress) {
+          setLightningAddress(data.lightningAddress || ""); // Initialize input with fetched data
+        }
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
@@ -286,6 +288,25 @@ function AppStatusPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <Label className="pt-2">Prompt:</Label>
+                  <div className="flex-grow relative">
+                    <Textarea
+                      value={appData.prompt}
+                      readOnly
+                      className="pr-10" // Add padding for the button
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-1 right-1 h-7 w-7" // Position button
+                      onClick={() => copyToClipboard(appData.prompt || "")}
+                      title="Copy prompt"
+                    >
+                      <CopyIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
                 <p>
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
@@ -334,7 +355,7 @@ function AppStatusPage() {
                     value={lightningAddress}
                     onChange={(e) => setLightningAddress(e.target.value)}
                   />
-                  <Button onClick={setLightningAddressHandler}>Set</Button>
+                  <Button onClick={saveLightningAddress}>Set</Button>
                 </div>
               </div>
 

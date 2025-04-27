@@ -2,6 +2,8 @@
 
 Lightning Fly - A platform to quickly create apps that you can earn through bitcoin lightning payments.
 
+[Try it now](https://lnfly.fly.dev/)
+
 ## Development
 
 ### Frontend
