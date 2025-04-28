@@ -23,11 +23,13 @@ model App {
   editKey String @default(uuid())
   previewKey String @default(uuid())
   errorMessage String? // Add field to store error messages
+  promptSuggestions String? // Add field to store prompt suggestions
 }
 
 enum AppState {
   INITIALIZING
   GENERATING
+  REVIEWING // Add state for title/suggestion generation
   COMPLETED
   FAILED
 }

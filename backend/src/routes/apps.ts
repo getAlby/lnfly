@@ -5,7 +5,7 @@ import {
   FastifyReply,
   FastifyRequest,
 } from "fastify";
-import { executePrompt } from "../ai/agent";
+import { evaluatePrompt, executePrompt, generateAppTitle } from "../ai/agent";
 
 // Define the expected options structure passed during registration
 interface AppRoutesOptions extends FastifyPluginOptions {
@@ -160,6 +160,7 @@ async function appRoutes(
           ...(request.query.editKey === app.editKey
             ? {
                 errorMessage: app.errorMessage,
+                promptSuggestions: app.promptSuggestions, // Add promptSuggestions here
               }
             : {}),
           ...(app.published || request.query.editKey === app.editKey
@@ -278,11 +279,9 @@ async function appRoutes(
     }
 
     if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
-      return reply
-        .code(400)
-        .send({
-          message: "Prompt is required and must be a non-empty string.",
-        });
+      return reply.code(400).send({
+        message: "Prompt is required and must be a non-empty string.",
+      });
     }
 
     try {
@@ -446,24 +445,51 @@ async function executePromptAndUpdateDb(
     const htmlStart = generatedHtml.indexOf("<html");
     const htmlEnd = generatedHtml.indexOf("</html>");
     if (htmlStart < 0 || htmlEnd < 0) {
-      throw new Error("Could not find HTML in generated response");
+      throw new Error(
+        "Could not find HTML in generated response: " + generatedHtml
+      );
     }
     generatedHtml = generatedHtml.substring(
       htmlStart,
       htmlEnd + "</html>".length
     );
 
-    // Final Update DB on completion (after stream ends)
+    // Update state to REVIEWING before generating title/suggestions
+    fastify.log.info(`App ${appId} updating state to REVIEWING.`);
     await prisma.app.update({
       where: { id: appId },
       data: {
-        html: generatedHtml,
-        state: AppState.COMPLETED,
-        numChars: generatedCharsCount, // Ensure final count is accurate
-        // TODO: Add title generation later
+        state: AppState.REVIEWING,
+        html: generatedHtml, // Save the generated HTML here too
+        numChars: generatedCharsCount, // Ensure count is saved before review
       },
     });
-    fastify.log.info(`App ${appId} generation COMPLETED.`);
+
+    // Generate title and evaluate prompt after successful HTML generation
+    fastify.log.info(`App ${appId} generating title and evaluating prompt...`);
+    const [generatedTitle, promptEvaluation] = await Promise.all([
+      generateAppTitle(prompt),
+      evaluatePrompt(prompt),
+    ]);
+    fastify.log.info(
+      `App ${appId} title: ${generatedTitle}, evaluation score: ${
+        promptEvaluation.split("\n")[0]
+      }`
+    );
+
+    // Final Update DB on completion (after review)
+    await prisma.app.update({
+      where: { id: appId },
+      data: {
+        // html and numChars already saved before REVIEWING state
+        state: AppState.COMPLETED,
+        title: generatedTitle, // Add generated title
+        promptSuggestions: promptEvaluation, // Add prompt evaluation
+      },
+    });
+    fastify.log.info(
+      `App ${appId} generation COMPLETED with title and evaluation.`
+    );
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     fastify.log.error(error, `Failed generation for app ID: ${appId}`);

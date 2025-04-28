@@ -21,10 +21,11 @@ interface AppData {
   id: number;
   title: string | null;
   // prompt: string; // We might not need the full prompt here
-  state: "INITIALIZING" | "GENERATING" | "COMPLETED" | "FAILED";
+  state: "INITIALIZING" | "GENERATING" | "REVIEWING" | "COMPLETED" | "FAILED"; // Add REVIEWING state
   numChars?: number;
   prompt?: string;
   errorMessage?: string;
+  promptSuggestions?: string | null; // Add prompt suggestions field
   createdAt: string;
   updatedAt: string;
   published: boolean;
@@ -48,6 +49,7 @@ function AppStatusPage() {
   const [promptText, setPromptText] = useState(""); // State for editable prompt
   const [lightningAddress, setLightningAddress] = useState("");
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false); // State for suggestions modal
   const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
@@ -156,6 +158,14 @@ function AppStatusPage() {
       toast.error("Prompt cannot be empty.");
       return;
     }
+    if (
+      appData.state === "COMPLETED" &&
+      !confirm(
+        "Are you sure you wish to re-generate the app? the current app will be lost."
+      )
+    ) {
+      return;
+    }
 
     setIsLoading(true); // Indicate loading state
     try {
@@ -260,7 +270,9 @@ function AppStatusPage() {
   );
 
   const shouldPoll =
-    appData?.state === "GENERATING" || appData?.state === "INITIALIZING";
+    appData?.state === "GENERATING" ||
+    appData?.state === "INITIALIZING" ||
+    appData?.state === "REVIEWING"; // Continue polling during REVIEWING
   useEffect(() => {
     if (!id) {
       setError("No App ID provided.");
@@ -327,6 +339,10 @@ function AppStatusPage() {
       statusMessage = "Generating...";
       statusColor = "text-blue-600 animate-pulse"; // Add pulse animation
       break;
+    case "REVIEWING": // Add case for REVIEWING state
+      statusMessage = "Reviewing...";
+      statusColor = "text-purple-600 animate-pulse"; // Use a different color/style
+      break;
     case "COMPLETED":
       statusMessage = "Completed";
       statusColor = "text-green-600";
@@ -346,8 +362,14 @@ function AppStatusPage() {
           {/* Center content */}
           <Card>
             <CardHeader>
-              <CardTitle>App {appData.id}</CardTitle>
-              <CardDescription>Status for App ID: {appData.id}</CardDescription>
+              <CardTitle>
+                {appData.title
+                  ? appData.title
+                  : appData.state === "COMPLETED" || appData.state === "FAILED"
+                  ? "Untitled App"
+                  : "Loading Title..."}
+              </CardTitle>
+              <CardDescription>App {appData.id}</CardDescription>
               {/* Display error alongside data if polling fails temporarily */}
               {error && (
                 <p className="text-sm text-red-500 mt-2">Warning: {error}</p>
@@ -361,7 +383,9 @@ function AppStatusPage() {
                     <Textarea
                       value={promptText} // Use state for value
                       onChange={(e) => setPromptText(e.target.value)} // Update state on change
-                      readOnly={appData.published} // Editable only if unpublished
+                      readOnly={
+                        appData.published || appData.state !== "COMPLETED"
+                      } // Editable only if unpublished
                       className={`pr-10 ${appData.published ? "bg-muted" : ""}`} // Adjust style when read-only
                     />
                     <Button
@@ -375,20 +399,34 @@ function AppStatusPage() {
                     </Button>
                   </div>
                 </div>
-                {/* Regenerate Button */}
-                {!appData.published &&
-                  editKey &&
-                  appData.state === "COMPLETED" && (
-                    <Button
-                      onClick={regenerateApp}
-                      disabled={isLoading}
-                      className="mt-2"
-                      variant="outline"
-                      size="sm"
-                    >
-                      Regenerate
-                    </Button>
-                  )}
+                {/* Action Buttons: Regenerate & Suggestions */}
+                <div className="flex gap-2 mt-2">
+                  {!appData.published &&
+                    editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "FAILED") && (
+                      <Button
+                        onClick={regenerateApp}
+                        disabled={isLoading}
+                        variant="outline"
+                        size="sm"
+                      >
+                        🪄 Regenerate
+                      </Button>
+                    )}
+                  {/* Suggestions Button */}
+                  {editKey &&
+                    appData.state === "COMPLETED" &&
+                    !!appData.promptSuggestions && (
+                      <Button
+                        onClick={() => setShowSuggestionsModal(true)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        ✨ Suggestions
+                      </Button>
+                    )}
+                </div>
                 <p>
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
@@ -527,6 +565,24 @@ function AppStatusPage() {
             </ul>
             <Button
               onClick={() => setShowLearnMoreModal(false)}
+              className="w-full"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Prompt Suggestions Modal */}
+      {showSuggestionsModal && appData?.promptSuggestions && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
+            <h3 className="text-lg font-bold mb-4">Prompt Suggestions</h3>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4">
+              {appData.promptSuggestions}
+            </pre>
+            <Button
+              onClick={() => setShowSuggestionsModal(false)}
               className="w-full"
             >
               Close
