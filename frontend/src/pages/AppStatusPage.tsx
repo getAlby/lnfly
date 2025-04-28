@@ -33,11 +33,19 @@ interface AppData {
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
 
+/*
+frontend/src/pages/AppStatusPage.tsx
+
+After the prompt text area I want a "Regenerate" button which will set the status back to generating and re-generate with the current prompt. (can only be called while unpublished). Also change the text area to be editable if it's unpublished.
+
+Make the necessary backend changes too.
+*/
 function AppStatusPage() {
   const { id } = useParams<{ id: string }>();
   const [appData, setAppData] = useState<AppData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [promptText, setPromptText] = useState(""); // State for editable prompt
   const [lightningAddress, setLightningAddress] = useState("");
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
@@ -136,6 +144,60 @@ function AppStatusPage() {
     }
   };
 
+  const regenerateApp = async () => {
+    if (!id || !editKey || !appData || appData.published) {
+      console.error(
+        "Cannot regenerate: Missing ID/key, no data, or app is published."
+      );
+      toast.error("Regeneration is only possible for unpublished apps.");
+      return;
+    }
+    if (!promptText.trim()) {
+      toast.error("Prompt cannot be empty.");
+      return;
+    }
+
+    setIsLoading(true); // Indicate loading state
+    try {
+      const response = await fetch(
+        `/api/apps/${id}/regenerate?editKey=${editKey}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt: promptText }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to regenerate app: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      // Optimistically update state and restart polling
+      setAppData((prev) =>
+        prev ? { ...prev, state: "GENERATING", errorMessage: undefined } : null
+      );
+      setError(null); // Clear previous errors
+      toast.info(`App ${id} regeneration started.`);
+      fetchStatus(true); // Immediately fetch status and restart polling if needed
+    } catch (error) {
+      console.error("Error regenerating app:", error);
+      toast.error(
+        `Error regenerating app: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+      setIsLoading(false); // Stop loading indicator on error
+    }
+    // setIsLoading will be set to false by fetchStatus in the finally block
+  };
+
   const fetchStatus = useCallback(
     async (isInitialLoad = false) => {
       if (!isInitialLoad && !isLoading) setIsLoading(true); // Show loading indicator on subsequent polls unless already loading
@@ -160,6 +222,10 @@ function AppStatusPage() {
         const data: AppData = await response.json();
         if (data.state === "COMPLETED" && appData?.state === "GENERATING") {
           toast("App ready!");
+        }
+        // Initialize or update promptText state only if it hasn't been edited by the user yet
+        if (isInitialLoad && !promptText) {
+          setPromptText(data.prompt || "");
         }
         setAppData(data);
         if (!lightningAddress) {
@@ -190,7 +256,7 @@ function AppStatusPage() {
         setIsLoading(false);
       }
     },
-    [appData?.state, editKey, id, isLoading]
+    [appData?.state, editKey, id, isLoading, lightningAddress, promptText] // Added promptText dependency
   );
 
   const shouldPoll =
@@ -293,9 +359,10 @@ function AppStatusPage() {
                   <Label className="pt-2">Prompt:</Label>
                   <div className="flex-grow relative">
                     <Textarea
-                      value={appData.prompt}
-                      readOnly
-                      className="pr-10" // Add padding for the button
+                      value={promptText} // Use state for value
+                      onChange={(e) => setPromptText(e.target.value)} // Update state on change
+                      readOnly={appData.published} // Editable only if unpublished
+                      className={`pr-10 ${appData.published ? "bg-muted" : ""}`} // Adjust style when read-only
                     />
                     <Button
                       variant="ghost"
@@ -308,6 +375,20 @@ function AppStatusPage() {
                     </Button>
                   </div>
                 </div>
+                {/* Regenerate Button */}
+                {!appData.published &&
+                  editKey &&
+                  appData.state === "COMPLETED" && (
+                    <Button
+                      onClick={regenerateApp}
+                      disabled={isLoading}
+                      className="mt-2"
+                      variant="outline"
+                      size="sm"
+                    >
+                      Regenerate
+                    </Button>
+                  )}
                 <p>
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
@@ -315,16 +396,6 @@ function AppStatusPage() {
                     {appData.state === "FAILED" && !!appData.errorMessage && (
                       <span className="text-sm">: {appData.errorMessage}</span>
                     )}
-                  </span>
-                </p>
-                <p>
-                  Published:{" "}
-                  <span
-                    className={`font-semibold ${
-                      appData.published ? "text-green-500" : "text-gray-500"
-                    }`}
-                  >
-                    {appData.published.toString()}
                   </span>
                 </p>
                 {!!appData.numChars && (
@@ -336,6 +407,16 @@ function AppStatusPage() {
                 <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
                 <p>
                   Last Update: {new Date(appData.updatedAt).toLocaleString()}
+                </p>
+                <p>
+                  Published:{" "}
+                  <span
+                    className={`font-semibold ${
+                      appData.published ? "text-green-500" : "text-gray-500"
+                    }`}
+                  >
+                    {appData.published.toString()}
+                  </span>
                 </p>
               </div>
 

@@ -253,6 +253,84 @@ async function appRoutes(
     }
   });
 
+  // Define the expected body structure for regenerating an app
+  interface RegenerateAppBody {
+    prompt: string;
+  }
+
+  // Route to regenerate an app
+  fastify.put<{
+    Params: { id: string };
+    Querystring: { editKey?: string };
+    Body: RegenerateAppBody;
+  }>("/:id/regenerate", async (request, reply) => {
+    const { id } = request.params;
+    const { editKey } = request.query;
+    const { prompt } = request.body;
+    const appId = parseInt(id, 10);
+
+    if (isNaN(appId)) {
+      return reply.code(400).send({ message: "Invalid App ID format." });
+    }
+
+    if (!editKey) {
+      return reply.code(401).send({ message: "Edit key is required." });
+    }
+
+    if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
+      return reply
+        .code(400)
+        .send({
+          message: "Prompt is required and must be a non-empty string.",
+        });
+    }
+
+    try {
+      // Find the app and validate the edit key and published status
+      const app = await prisma.app.findUnique({
+        where: { id: appId },
+      });
+
+      if (!app) {
+        return reply.code(404).send({ message: "App not found." });
+      }
+
+      if (editKey !== app.editKey) {
+        return reply.code(403).send({ message: "Invalid edit key." });
+      }
+
+      if (app.published) {
+        return reply
+          .code(400)
+          .send({ message: "Cannot regenerate a published app." });
+      }
+
+      // Update the app to reset state and set new prompt
+      await prisma.app.update({
+        where: { id: appId },
+        data: {
+          prompt: prompt,
+          state: AppState.INITIALIZING,
+          html: null, // Clear previous results
+          numChars: 0,
+          errorMessage: null,
+          title: null, // Reset title as well
+        },
+      });
+
+      fastify.log.info(`App ${appId} regeneration requested with new prompt.`);
+      reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
+
+      // Start generation in the background (fire and forget)
+      executePromptAndUpdateDb(fastify, prisma, appId, prompt);
+    } catch (error) {
+      fastify.log.error(error, `Failed to regenerate app for ID: ${appId}`);
+      if (!reply.sent) {
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  });
+
   // Route to view generated HTML
   fastify.get<{ Params: { id: string }; Querystring: { previewKey?: string } }>(
     "/:id/view",
