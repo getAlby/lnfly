@@ -1,8 +1,9 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useEffect, useState } from "react";
 
 interface App {
+  title?: string;
   id: number;
   prompt: string;
   status: string; // Assuming status is a string like 'completed'
@@ -73,7 +74,9 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
         {completedApps.map((app) => (
           <li key={app.id}>
             <Card>
-              {" "}
+              <CardHeader>
+                <CardTitle>{app.title || "Untitled App"}</CardTitle>
+              </CardHeader>
               {/* Each app is a card */}
               <CardContent className="flex flex-col">
                 {" "}

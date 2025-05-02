@@ -55,6 +55,7 @@ async function appRoutes(
               id: true,
               prompt: true,
               state: true,
+              title: true,
               // Include other fields if needed in the list view
             },
           });
@@ -186,6 +187,7 @@ async function appRoutes(
   interface UpdateAppBody {
     published?: boolean;
     lightningAddress?: string;
+    title?: string; // Add title field
     // Add other updatable fields here later
   }
 
@@ -197,7 +199,7 @@ async function appRoutes(
   }>("/:id", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { published, lightningAddress } = request.body;
+    const { published, lightningAddress, title } = request.body; // Extract title
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -209,7 +211,8 @@ async function appRoutes(
     }
 
     // Ensure at least one updatable field is provided
-    if (published === undefined && !lightningAddress) {
+    if (published === undefined && !lightningAddress && title === undefined) {
+      // Update validation
       return reply.code(400).send({ message: "No updatable fields provided." });
     }
 
@@ -233,18 +236,19 @@ async function appRoutes(
         data: {
           published,
           lightningAddress,
-          // Add other updatable fields here later
+          title,
         },
         select: {
           id: true,
           published: true,
           lightningAddress: true,
+          title: true, // Select title to return it
           // Select other fields to return if needed
         },
       });
 
       fastify.log.info(
-        `App ${appId} updated. Published: ${updatedApp.published}`
+        `App ${appId} updated. Published: ${updatedApp.published}, Title: ${updatedApp.title}` // Update log
       );
 
       return reply.send(updatedApp);

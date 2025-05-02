@@ -1,17 +1,11 @@
 import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
 import { Button } from "@/components/ui/button"; // Import Button
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"; // Import Card components
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { copyToClipboard } from "@/lib/clipboard";
-import { CopyIcon, InfoIcon } from "lucide-react";
+import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -51,6 +45,8 @@ function AppStatusPage() {
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false); // State for suggestions modal
   const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
+  const [showEditTitleModal, setShowEditTitleModal] = useState(false); // State for edit title modal
+  const [appTitle, setAppTitle] = useState(""); // State for the title being edited
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
@@ -269,6 +265,49 @@ function AppStatusPage() {
     [appData?.state, editKey, id, isLoading, lightningAddress, promptText] // Added promptText dependency
   );
 
+  const saveAppTitle = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot save title: Missing App ID or edit key.");
+      toast.error("Error: Missing App ID or edit key.");
+      return;
+    }
+    if (!appTitle.trim()) {
+      toast.error("Title cannot be empty.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT", // Or PATCH if preferred on backend
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ title: appTitle }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to save title: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      // Update local state optimistically or refetch
+      setAppData((prev) => (prev ? { ...prev, title: appTitle } : null));
+      toast.success(`App title updated successfully.`);
+      setShowEditTitleModal(false); // Close modal on success
+    } catch (error) {
+      console.error("Error saving app title:", error);
+      toast.error(
+        `Error saving title: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
   const shouldPoll =
     appData?.state === "GENERATING" ||
     appData?.state === "INITIALIZING" ||
@@ -368,8 +407,24 @@ function AppStatusPage() {
                   : appData.state === "COMPLETED" || appData.state === "FAILED"
                   ? "Untitled App"
                   : "Loading Title..."}
+
+                {appData.state === "COMPLETED" &&
+                  editKey && ( // Only show if editKey exists
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="ml-2 h-6 w-6" // Adjust size and margin
+                      onClick={() => {
+                        setAppTitle(appData.title || ""); // Initialize editing title
+                        setShowEditTitleModal(true);
+                      }}
+                      title="Edit title"
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </Button>
+                  )}
               </CardTitle>
-              <CardDescription>App {appData.id}</CardDescription>
+              {/* <CardDescription>App {appData.id}</CardDescription> */}
               {/* Display error alongside data if polling fails temporarily */}
               {error && (
                 <p className="text-sm text-red-500 mt-2">Warning: {error}</p>
@@ -587,6 +642,33 @@ function AppStatusPage() {
             >
               Close
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Title Modal */}
+      {showEditTitleModal && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">Edit App Title</h3>
+            <div className="space-y-2 mb-4">
+              <Label htmlFor="edit-title-input">App Title</Label>
+              <Input
+                id="edit-title-input"
+                value={appTitle}
+                onChange={(e) => setAppTitle(e.target.value)}
+                placeholder="Enter a title for your app"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowEditTitleModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={saveAppTitle}>Save</Button>
+            </div>
           </div>
         </div>
       )}
