@@ -14,7 +14,10 @@ model App {
   title     String?
   prompt    String
   html      String?
+  denoCode  String? // New field for Deno backend code
   state     AppState @default(INITIALIZING)
+  backendState BackendState @default(STOPPED) // New field for backend status
+  backendPort Int? // New field for the port the backend runs on
   numChars  Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -24,6 +27,7 @@ model App {
   previewKey String @default(uuid())
   errorMessage String? // Add field to store error messages
   promptSuggestions String? // Add field to store prompt suggestions
+  generatingSection String?
 }
 
 enum AppState {
@@ -32,4 +36,13 @@ enum AppState {
   REVIEWING // Add state for title/suggestion generation
   COMPLETED
   FAILED
+}
+
+// New enum for backend process state
+enum BackendState {
+  STOPPED
+  STARTING
+  RUNNING
+  STOPPING
+  FAILED_TO_START
 }

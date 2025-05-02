@@ -1,11 +1,14 @@
 require("dotenv").config();
+import replyFrom from "@fastify/reply-from";
 import fastifyStatic from "@fastify/static";
-import { PrismaClient } from "@prisma/client"; // Import Prisma Client
+import { PrismaClient } from "@prisma/client";
 import Fastify from "fastify";
 import path from "path";
-import appRoutes from "./routes/apps"; // Import app routes
+import { DenoManager } from "./deno_manager"; // Import DenoManager
+import appRoutes from "./routes/apps";
 
-const prisma = new PrismaClient(); // Instantiate Prisma Client
+const prisma = new PrismaClient();
+const denoManager = new DenoManager(prisma); // Instantiate DenoManager
 
 const fastify = Fastify({
   logger: true,
@@ -17,10 +20,13 @@ fastify.register(fastifyStatic, {
   prefix: "/", // Serve from the root
 });
 
+// Register reply-from for proxying
+fastify.register(replyFrom);
 // Register app routes, passing the walletService, prisma, and cache instances
 fastify.register(appRoutes, {
   prefix: "/api/apps",
-  prisma: prisma, // Pass prisma instance
+  prisma: prisma,
+  denoManager: denoManager, // Pass denoManager instance
 });
 
 // Fallback route to serve index.html for client-side routing
@@ -39,6 +45,9 @@ const start = async () => {
     // --- Phase 3: Startup Initialization ---
     fastify.log.info("Starting backend...");
 
+    // Initialize Deno Manager (resetting states)
+    await denoManager.initializeManager();
+
     fastify.log.info("Completed startup initialization.");
     // --- End Phase 3 ---
 
@@ -53,3 +62,16 @@ const start = async () => {
 };
 
 start();
+
+// Graceful shutdown
+const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
+signals.forEach((signal) => {
+  process.on(signal, async () => {
+    fastify.log.info(`Received ${signal}, shutting down gracefully...`);
+    await denoManager.stopAllBackends(); // Stop Deno processes first
+    await fastify.close();
+    await prisma.$disconnect(); // Disconnect Prisma
+    fastify.log.info("Server shut down.");
+    process.exit(0);
+  });
+});

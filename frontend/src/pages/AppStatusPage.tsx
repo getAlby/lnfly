@@ -11,42 +11,54 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 // Define the expected structure of the app data from the API
+// Define possible backend states from Prisma enum
+type BackendState =
+  | "STOPPED"
+  | "STARTING"
+  | "RUNNING"
+  | "STOPPING"
+  | "FAILED_TO_START";
+
 interface AppData {
   id: number;
   title: string | null;
-  // prompt: string; // We might not need the full prompt here
-  state: "INITIALIZING" | "GENERATING" | "REVIEWING" | "COMPLETED" | "FAILED"; // Add REVIEWING state
+  state: "INITIALIZING" | "GENERATING" | "REVIEWING" | "COMPLETED" | "FAILED";
   numChars?: number;
+  html?: string;
   prompt?: string;
   errorMessage?: string;
-  promptSuggestions?: string | null; // Add prompt suggestions field
+  promptSuggestions?: string | null;
   createdAt: string;
   updatedAt: string;
   published: boolean;
   lightningAddress?: string | null;
+  // Backend related fields (only present if editKey matches)
+  denoCode?: string | null;
+  backendState?: BackendState | null;
+  backendPort?: number | null;
+  generatingSection?: string | null; // Add generating section
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
 
-/*
-frontend/src/pages/AppStatusPage.tsx
-
-After the prompt text area I want a "Regenerate" button which will set the status back to generating and re-generate with the current prompt. (can only be called while unpublished). Also change the text area to be editable if it's unpublished.
-
-Make the necessary backend changes too.
-*/
 function AppStatusPage() {
   const { id } = useParams<{ id: string }>();
   const [appData, setAppData] = useState<AppData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // General loading for initial fetch/polling
+  const [isBackendLoading, setIsBackendLoading] = useState(false); // Specific loading for backend actions
   const [error, setError] = useState<string | null>(null);
-  const [promptText, setPromptText] = useState(""); // State for editable prompt
+  const [promptText, setPromptText] = useState("");
   const [lightningAddress, setLightningAddress] = useState("");
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
-  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false); // State for suggestions modal
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
-  const [showEditTitleModal, setShowEditTitleModal] = useState(false); // State for edit title modal
-  const [appTitle, setAppTitle] = useState(""); // State for the title being edited
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to hold the latest appData for use in interval callbacks
+  const appDataRef = useRef(appData);
+  useEffect(() => {
+    appDataRef.current = appData;
+  }, [appData]);
+  const [showEditTitleModal, setShowEditTitleModal] = useState(false);
+  const [appTitle, setAppTitle] = useState("");
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
@@ -240,7 +252,10 @@ function AppStatusPage() {
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
-        if (data.state === "COMPLETED" || data.state === "FAILED") {
+        if (
+          (data.state === "COMPLETED" && data.backendState !== "STARTING") ||
+          data.state === "FAILED"
+        ) {
           if (intervalRef.current) {
             console.log(`Polling stopped for App ${id}, state: ${data.state}`);
             clearInterval(intervalRef.current);
@@ -262,7 +277,7 @@ function AppStatusPage() {
         setIsLoading(false);
       }
     },
-    [appData?.state, editKey, id, isLoading, lightningAddress, promptText] // Added promptText dependency
+    [appData?.state, editKey, id, isLoading, lightningAddress, promptText]
   );
 
   const saveAppTitle = async () => {
@@ -308,10 +323,129 @@ function AppStatusPage() {
     }
   };
 
+  // --- Backend Control Handlers ---
+  const handleBackendAction = async (action: "start" | "stop") => {
+    if (!id || !editKey || !appData?.denoCode) {
+      toast.error("Cannot perform backend action: Missing ID, key, or code.");
+      return;
+    }
+
+    setIsBackendLoading(true);
+    try {
+      const response = await fetch(
+        `/api/apps/${id}/backend/${action}?editKey=${editKey}`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: response.statusText }));
+        throw new Error(
+          `Failed to ${action} backend: ${response.status} - ${errorData.message}`
+        );
+      }
+
+      const result = await response.json();
+      toast.success(`Backend ${action} request sent successfully.`);
+
+      // Update local state immediately based on expected result or refetch
+      setAppData((prev) =>
+        prev
+          ? {
+              ...prev,
+              backendState:
+                result.backendState ||
+                (action === "start" ? "STARTING" : "STOPPING"), // Optimistic update
+              backendPort: action === "stop" ? null : prev.backendPort, // Clear port on stop
+            }
+          : null
+      );
+      // Optionally trigger a fetchStatus() after a short delay to confirm
+      setTimeout(() => fetchStatus(), 1000);
+    } catch (error) {
+      console.error(`Error ${action}ing backend:`, error);
+      toast.error(
+        `Error ${action}ing backend: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    } finally {
+      setIsBackendLoading(false);
+    }
+  };
+
+  const handleStartBackend = () => handleBackendAction("start");
+  const handleStopBackend = () => handleBackendAction("stop");
+  // --- End Backend Control Handlers ---
+
+  const cancelGeneration = async () => {
+    if (!id || !editKey || appData?.state !== "GENERATING") {
+      console.error(
+        "Cannot cancel: Missing ID/key or not in GENERATING state."
+      );
+      toast.error("Cancellation is only possible during generation.");
+      return;
+    }
+
+    setIsLoading(true); // Indicate loading state
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          state: "FAILED",
+          errorMessage: "Cancelled by user",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to cancel generation: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      // Optimistically update state and stop polling
+      setAppData((prev) =>
+        prev
+          ? {
+              ...prev,
+              state: "FAILED",
+              errorMessage: "Cancelled by user",
+            }
+          : null
+      );
+      setError(null); // Clear previous errors
+      toast.info(`App ${id} generation cancelled.`);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current); // Stop polling immediately
+        intervalRef.current = null;
+      }
+    } catch (error) {
+      console.error("Error cancelling generation:", error);
+      toast.error(
+        `Error cancelling generation: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    } finally {
+      setIsLoading(false); // Stop loading indicator
+    }
+  };
+
   const shouldPoll =
     appData?.state === "GENERATING" ||
     appData?.state === "INITIALIZING" ||
-    appData?.state === "REVIEWING"; // Continue polling during REVIEWING
+    appData?.state === "REVIEWING" ||
+    appData?.backendState === "STARTING" || // Poll while backend is starting/stopping
+    appData?.backendState === "STOPPING";
   useEffect(() => {
     if (!id) {
       setError("No App ID provided.");
@@ -342,7 +476,7 @@ function AppStatusPage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [fetchStatus, id, shouldPoll]); // Rerun effect if ID changes
+  }, [fetchStatus, id, shouldPoll]); // Rerun effect if backend state changes too
 
   // --- Render Logic ---
 
@@ -375,7 +509,9 @@ function AppStatusPage() {
       statusColor = "text-yellow-600";
       break;
     case "GENERATING":
-      statusMessage = "Generating...";
+      statusMessage = `Generating${
+        appData.generatingSection ? `: ${appData.generatingSection}` : "..."
+      }`;
       statusColor = "text-blue-600 animate-pulse"; // Add pulse animation
       break;
     case "REVIEWING": // Add case for REVIEWING state
@@ -481,6 +617,30 @@ function AppStatusPage() {
                         ✨ Suggestions
                       </Button>
                     )}
+                  {editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "REVIEWING") &&
+                    !!appData.html && (
+                      <Button
+                        onClick={() => prompt("HTML", appData.html)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        💻 View HTML
+                      </Button>
+                    )}
+                  {editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "REVIEWING") &&
+                    !!appData.denoCode && (
+                      <Button
+                        onClick={() => prompt("HTML", appData.denoCode!)}
+                        variant="outline"
+                        size="sm"
+                      >
+                        🗄️ View Backend
+                      </Button>
+                    )}
                 </div>
                 <p>
                   Status:{" "}
@@ -490,6 +650,18 @@ function AppStatusPage() {
                       <span className="text-sm">: {appData.errorMessage}</span>
                     )}
                   </span>
+                  {/* Cancel Button */}
+                  {appData.state === "GENERATING" && editKey && (
+                    <Button
+                      onClick={cancelGeneration}
+                      disabled={isLoading}
+                      variant="destructive"
+                      size="sm"
+                      className="ml-2"
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </p>
                 {!!appData.numChars && (
                   <p>
@@ -512,6 +684,61 @@ function AppStatusPage() {
                   </span>
                 </p>
               </div>
+
+              {/* --- Backend Status Section --- */}
+              {editKey &&
+                appData.denoCode && ( // Only show if editKey matches and denoCode exists
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="font-semibold mb-2 text-md">
+                      Backend Status
+                    </h4>
+                    <p>
+                      State:{" "}
+                      <span className="font-medium">
+                        {appData.backendState || "Unknown"}
+                      </span>
+                      {appData.backendState === "RUNNING" &&
+                        appData.backendPort && (
+                          <span> (Port: {appData.backendPort})</span>
+                        )}
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        onClick={handleStartBackend}
+                        disabled={
+                          isBackendLoading ||
+                          appData.backendState === "RUNNING" ||
+                          appData.backendState === "STARTING" ||
+                          appData.backendState === "STOPPING"
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        {isBackendLoading &&
+                        (appData.backendState === "STARTING" ||
+                          !appData.backendState)
+                          ? "Starting..."
+                          : "Start Backend"}
+                      </Button>
+                      <Button
+                        onClick={handleStopBackend}
+                        disabled={
+                          isBackendLoading ||
+                          appData.backendState === "STOPPED" ||
+                          appData.backendState === "STOPPING" ||
+                          appData.backendState === "FAILED_TO_START"
+                        }
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {isBackendLoading && appData.backendState === "STOPPING"
+                          ? "Stopping..."
+                          : "Stop Backend"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              {/* --- End Backend Status Section --- */}
 
               {/* Lightning Address Input */}
               <div className="mt-4 space-y-2">
@@ -537,27 +764,33 @@ function AppStatusPage() {
                 </div>
               </div>
 
-              {appData.state === "COMPLETED" && (
-                <a
-                  href={
-                    buttonDisabled
-                      ? "#"
-                      : `/api/apps/${id}/view${
-                          appData.published ? "" : `?previewKey=${previewKey}`
-                        }`
-                  }
-                >
-                  <Button
-                    disabled={buttonDisabled}
-                    className="mt-4 w-full" // Make button full width
-                    size="lg" // Make button larger
+              {(appData.state === "COMPLETED" ||
+                appData.state === "REVIEWING") &&
+                (!appData.denoCode || appData.backendState === "RUNNING") && (
+                  <a
+                    href={
+                      buttonDisabled
+                        ? "#"
+                        : `/api/apps/${id}/view${
+                            appData.published ? "" : `?previewKey=${previewKey}`
+                          }`
+                    }
+                    target="_blank"
                   >
-                    {appData.published ? "View app" : "Preview unpublished app"}
-                  </Button>
-                </a>
-              )}
+                    <Button
+                      disabled={buttonDisabled}
+                      className="mt-4 w-full" // Make button full width
+                      size="lg" // Make button larger
+                    >
+                      {appData.published
+                        ? "View app"
+                        : "Preview unpublished app"}
+                    </Button>
+                  </a>
+                )}
               {!appData.published &&
                 appData.state === "COMPLETED" &&
+                (!appData.denoCode || appData.backendState === "RUNNING") &&
                 editKey && (
                   <Button
                     disabled={buttonDisabled}
