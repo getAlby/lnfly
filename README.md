@@ -10,7 +10,7 @@ LNFly focuses on simplicity - 1 html file for frontend, and if needed, 1 deno fi
 
 LNFly provides information on how to make payments to the LLM through a system prompt.
 
-Deno is secure by default - therefore Deno apps can be run as child processes. Deno apps only have access to the internet
+Deno is secure by default and can be run as child processes without endangering the parent app. The child processes can access the internet, but not the local filesystem.
 
 ## Features
 
@@ -28,7 +28,10 @@ Deno is secure by default - therefore Deno apps can be run as child processes. D
 - [x] [Bitcoin Connect] Launch Payment modal
 - [x] [Bitcoin Connect] Request WebLN provider
 - [x] [NWC] Create, lookup and pay invoices
-- [ ] Generate system prompt based on request
+- [x] Generate system prompt based on request
+- [ ] Update dockerfile to add fly
+- [ ] Stop app backends automatically after 10 minutes
+- [ ] Allow specifying a seed for generation
 - [ ] Zap posts on homepage
 - [ ] User accounts
 - [ ] Nostr knowledge

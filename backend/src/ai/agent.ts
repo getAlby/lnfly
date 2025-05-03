@@ -1,9 +1,10 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, LanguageModelV1, streamText } from "ai";
-import fs from "fs";
-import path from "path";
-import { generateSystemPrompt } from "./systemPrompt";
+import {
+  buildSystemPrompt,
+  optionalSystemPromptSegments,
+} from "./systemPrompt";
 
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -27,32 +28,67 @@ if (geminiApiKey) {
   chatModel = openrouter.chat(modelName);
 }
 
-const systemPrompt = generateSystemPrompt();
+const seed = 212121;
 
-// Helper async generator for the mock case
-async function* mockStream(): AsyncIterable<string> {
-  await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate delay
-  const mockOutputPath = path.join(__dirname, "mock-output.html");
+export const generateSystemPrompt = async (prompt: string) => {
+  const segmentPrompts: string[] = [];
+  let segmentNames: string[] = [];
   try {
-    const fileContent = fs.readFileSync(mockOutputPath, "utf-8");
-    yield fileContent; // Yield the content as a single chunk
+    const { text } = await generateText({
+      model: chatModel,
+      system: `You are an expert software architect. Your task is to review the given prompt and figure out which additional knowledge we need. Here are the segments: ${JSON.stringify(
+        optionalSystemPromptSegments.map((segment) => ({
+          name: segment.name,
+          usecase: segment.usecase,
+          environment: segment.environment,
+        }))
+      )}. Pay special care to the usecase and environment ("frontend" = it can only be used in the html app, "backend" = it can only be used in the deno code, "any" = can be used in both.)
+      
+      MANDATORY INSTRUCTIONS:
+      Return the EXACT names (exact characters and casing) of the segments from the provided JSON that you think should be used as a JSON string array, without any explanations or surrounding text.`,
+      prompt,
+      seed,
+    });
+    console.log("Got segment names:", text);
+
+    let arrayStart = text.indexOf("[");
+    let arrayEnd = text.lastIndexOf("]");
+    const extractedText = text.slice(arrayStart, arrayEnd + 1);
+
+    segmentNames = JSON.parse(extractedText) as string[];
+    if (!Array.isArray(segmentNames)) {
+      throw new Error("segment names is not an array");
+    }
+
+    for (const name of segmentNames) {
+      const segment = optionalSystemPromptSegments.find(
+        (segment) => segment.name === name
+      );
+      if (!segment) {
+        throw new Error("Unknown segment: " + name);
+      }
+      segmentPrompts.push(segment.prompt);
+    }
+
+    if (!segmentPrompts.length) {
+      throw new Error("No segments found!");
+    }
   } catch (error) {
-    console.error("Error reading mock output file:", error);
-    yield `<p>Error loading content.</p>`; // Yield an error message
+    console.error("Error generating finding parts for system prompt:", error);
+    // Return a generic title or re-throw, depending on desired handling
+    throw error;
   }
-}
+
+  const systemPrompt = buildSystemPrompt(segmentPrompts);
+
+  return { systemPrompt, segmentNames };
+};
 
 // Updated function signature to return AsyncIterable<string>
-export const executePrompt = (prompt: string): AsyncIterable<string> => {
-  // Handle the mock case by returning the async generator
-  if (prompt === "MOCK_OUTPUT") {
-    // Simplified check
-    console.log("Using mock stream for 'snake' prompt.");
-    return mockStream();
-  }
-
-  // Normal case: return the textStream directly
-
+export const executePrompt = (
+  prompt: string,
+  systemPrompt: string
+): AsyncIterable<string> => {
   console.log("Streaming from OpenRouter for prompt:", prompt);
 
   console.log("System prompt: ", systemPrompt);
@@ -65,7 +101,7 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
     const { textStream } = await streamText({
       model: chatModel,
       system: systemPrompt,
-      seed: 212121,
+      seed,
       prompt,
       onError: (event) => {
         throw new Error(
@@ -83,12 +119,13 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
 };
 
 // Function to generate a short title for the app based on the prompt
-export const generateAppTitle = async (prompt: string): Promise<string> => {
+export const generateAppTitle = async (html: string): Promise<string> => {
   try {
     const { text } = await generateText({
       model: chatModel,
-      system: `You are an expert copywriter. Your task is to generate a concise and catchy title for a web application based on the user's prompt describing the app. The title MUST be less than 6 words long. Only output the title itself, without any explanations or surrounding text. The first word must start with a capital letter and the title must be made of real words.`,
-      prompt: `Generate a title for an app described as follows: "${prompt}"`,
+      system: `You are an expert copywriter. Your task is to generate a concise and catchy title for a web application based on the given HTML. If you find a title in the app, use that. Otherwise, generate one. Only output the title itself, without any explanations or surrounding text.`,
+      prompt: `Generate a title for an app described as follows: "${html}"`,
+      seed,
     });
     console.log("Generated title:", text);
     // Basic cleanup: remove potential quotes and trim whitespace
@@ -101,7 +138,10 @@ export const generateAppTitle = async (prompt: string): Promise<string> => {
 };
 
 // Function to evaluate the clarity of the prompt and provide suggestions
-export const evaluatePrompt = async (prompt: string): Promise<string> => {
+export const evaluatePrompt = async (
+  prompt: string,
+  systemPrompt: string
+): Promise<string> => {
   // Combine the user prompt with the system prompt used for generation for context
   const fullPromptContext = `
 System Prompt for App Generation:

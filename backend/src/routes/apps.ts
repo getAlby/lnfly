@@ -5,7 +5,12 @@ import {
   FastifyReply,
   FastifyRequest,
 } from "fastify";
-import { evaluatePrompt, executePrompt, generateAppTitle } from "../ai/agent";
+import {
+  evaluatePrompt,
+  executePrompt,
+  generateAppTitle,
+  generateSystemPrompt,
+} from "../ai/agent";
 import { DenoManager } from "../deno_manager"; // Import DenoManager
 
 // Define the expected options structure passed during registration
@@ -170,6 +175,7 @@ async function appRoutes(
                 backendState: app.backendState,
                 backendPort: app.backendPort,
                 generatingSection: app.generatingSection,
+                systemPrompt: app.systemPrompt,
               }
             : {}),
           ...(app.published || request.query.editKey === app.editKey
@@ -180,6 +186,7 @@ async function appRoutes(
                 prompt: app.prompt,
                 numChars: app.numChars,
                 title: app.title,
+                systemPromptSegmentNames: app.systemPromptSegmentNames,
                 // Do NOT expose denoCode/backend details here unless editKey matches (handled above)
               }
             : {}),
@@ -613,8 +620,16 @@ async function executePromptAndUpdateDb(
   const throttleInterval = 1000; // Update DB at most every 1 second
 
   try {
+    // based on the prompt we give it specific knowledge
+    const { systemPrompt, segmentNames } = await generateSystemPrompt(prompt);
+
+    await prisma.app.update({
+      where: { id: appId },
+      data: { systemPrompt, systemPromptSegmentNames: segmentNames.join(", ") },
+    });
+
     // Get the stream from the updated executePrompt
-    const outputStream = executePrompt(prompt);
+    const outputStream = executePrompt(prompt, systemPrompt);
 
     let currentLine = "";
     // Process the stream chunk by chunk
@@ -672,8 +687,8 @@ async function executePromptAndUpdateDb(
     }
 
     // --- Parse the full output ---
-    const htmlStartMarker = "<!-- HTML_START -->";
-    const htmlEndMarker = "<!-- HTML_END -->";
+    const htmlStartMarker = "<html>";
+    const htmlEndMarker = "</html>";
     const denoStartMarker = "// DENO_START";
     const denoEndMarker = "// DENO_END";
 
@@ -684,7 +699,7 @@ async function executePromptAndUpdateDb(
 
     if (htmlStartIndex !== -1 && htmlEndIndex !== -1) {
       generatedHtml = fullOutput
-        .substring(htmlStartIndex + htmlStartMarker.length, htmlEndIndex)
+        .substring(htmlStartIndex, htmlEndIndex + htmlEndMarker.length)
         .trim();
     } else {
       // Assume the whole output is HTML if markers are missing
@@ -719,8 +734,8 @@ async function executePromptAndUpdateDb(
     // Generate title and evaluate prompt after successful HTML generation
     fastify.log.info(`App ${appId} generating title and evaluating prompt...`);
     const [generatedTitle, promptEvaluation] = await Promise.all([
-      generateAppTitle(prompt),
-      evaluatePrompt(prompt),
+      generateAppTitle(generatedHtml),
+      evaluatePrompt(prompt, systemPrompt),
     ]);
     fastify.log.info(
       `App ${appId} title: ${generatedTitle}, evaluation score: ${

@@ -28,6 +28,8 @@ model App {
   errorMessage String? // Add field to store error messages
   promptSuggestions String? // Add field to store prompt suggestions
   generatingSection String?
+  systemPrompt String?
+  systemPromptSegmentNames String?
 }
 
 enum AppState {

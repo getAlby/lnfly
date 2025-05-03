@@ -1,13 +1,16 @@
-const optionalSystemPromptSegments: {
+type SystemPromptSegment = {
   name: string;
   usecase: string;
   prompt: string;
   environment: "frontend" | "backend" | "any";
-}[] = [
+};
+
+export const optionalSystemPromptSegments: SystemPromptSegment[] = [
   {
     name: "bitcoin connect (payment modal)",
     environment: "frontend",
-    usecase: "Pay an invoice and do something once the invoice was paid",
+    usecase:
+      "Pay an invoice and do something once the invoice was paid. If you need other wallet interaction from the user, this is not the right segment for you.",
     prompt: `
 You know how to use bitcoin connect on the frontend to make payments:
 
@@ -70,7 +73,8 @@ You know how to use bitcoin connect on the frontend to connect to a wallet:
   {
     name: "lightning tools",
     environment: "any",
-    usecase: "fetch a lightning invoice from a lightning address",
+    usecase:
+      "fetch a lightning invoice from a lightning address. Only use if you only have the recipient lightning address. If you have a NWC connection to generate the invoice, use that instead",
     prompt: `
 You know how to use lightning tools to generate a lightning invoice for a lightning address and check if it was paid:
 
@@ -126,14 +130,11 @@ const {preimage} = await client.lookupInvoice({
   },
 ];
 
-export const generateSystemPrompt =
-  () => `You are an expert full-stack web developer AI. Your primary task is to generate a complete, single-file HTML application based on a user's prompt. Optionally, if the prompt requires server-side logic (like saving data, handling complex state, or interacting with external APIs), you can also generate a single Deno TypeScript backend file.
+export const buildSystemPrompt = (
+  segmentPrompts: string[]
+) => `You are an expert full-stack web developer AI. Your primary task is to generate a complete, single-file HTML application based on a user's prompt. Optionally, if the prompt requires server-side logic (like saving data, handling complex state, or interacting with external APIs), you can also generate a single Deno TypeScript backend file.
 
-${optionalSystemPromptSegments.find((s) => s.name === "NWC")?.prompt}
-${
-  optionalSystemPromptSegments.find((s) => s.name === "bitcoin connect (WebLN)")
-    ?.prompt
-}
+${segmentPrompts.join("\n\n")}
 
 Here are the rules you MUST follow:
 

@@ -1,4 +1,5 @@
 import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
+import { Badge } from "@/components/ui/badge"; // Import Badge
 import { Button } from "@/components/ui/button"; // Import Button
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,8 @@ interface AppData {
   backendState?: BackendState | null;
   backendPort?: number | null;
   generatingSection?: string | null; // Add generating section
+  systemPrompt?: string;
+  systemPromptSegmentNames?: string;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
@@ -51,6 +54,7 @@ function AppStatusPage() {
   const [lightningAddress, setLightningAddress] = useState("");
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   // Ref to hold the latest appData for use in interval callbacks
   const appDataRef = useRef(appData);
@@ -592,8 +596,10 @@ function AppStatusPage() {
                     </Button>
                   </div>
                 </div>
-                {/* Action Buttons: Regenerate & Suggestions */}
-                <div className="flex gap-2 mt-2">
+                {/* Action Buttons: Regenerate, Suggestions, System Prompt, HTML, Backend */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {" "}
+                  {/* Use flex-wrap for better responsiveness */}
                   {!appData.published &&
                     editKey &&
                     (appData.state === "COMPLETED" ||
@@ -643,8 +649,39 @@ function AppStatusPage() {
                         🗄️ View Backend
                       </Button>
                     )}
+                  {/* View System Prompt Button */}
+                  {editKey && appData.systemPrompt && (
+                    <Button
+                      onClick={() => setShowSystemPromptModal(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      📄 View System Prompt
+                    </Button>
+                  )}
                 </div>
-                <p>
+                {/* System Knowledge Badges */}
+                {editKey && appData.systemPromptSegmentNames && (
+                  <div className="mt-3">
+                    <h4 className="text-sm font-medium mb-1">
+                      System Knowledge
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {appData.systemPromptSegmentNames
+                        .split(",")
+                        .map((name) => name.trim())
+                        .filter(Boolean) // Remove empty strings if any
+                        .map((name) => (
+                          <Badge key={name} variant="secondary">
+                            {name}
+                          </Badge>
+                        ))}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2">
+                  {" "}
+                  {/* Add margin top to separate from badges */}
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
                     {statusMessage}
@@ -956,6 +993,34 @@ function AppStatusPage() {
             </pre>
             <Button
               onClick={() => setShowBackendModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* View System Prompt Modal */}
+      {showSystemPromptModal && appData?.systemPrompt && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View System Prompt</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.systemPrompt || "")}
+                title="Copy System Prompt"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.systemPrompt}
+            </pre>
+            <Button
+              onClick={() => setShowSystemPromptModal(false)}
               className="w-full mt-auto"
             >
               Close
