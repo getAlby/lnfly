@@ -1,108 +1,33 @@
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, streamText } from "ai";
+import { generateText, LanguageModelV1, streamText } from "ai";
 import fs from "fs";
 import path from "path";
+import { generateSystemPrompt } from "./systemPrompt";
 
-const apiKey = process.env.OPENROUTER_API_KEY;
-const modelName = "deepseek/deepseek-chat-v3-0324:free";
+const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+let chatModel: LanguageModelV1;
 
-const systemPrompt = `You are an expert full-stack web developer AI. Your primary task is to generate a complete, single-file HTML application based on a user's prompt. Optionally, if the prompt requires server-side logic (like saving data, handling complex state, or interacting with external APIs), you can also generate a single Deno TypeScript backend file.
-
-You know how to use bitcoin connect and lightning tools to accept payments:
-
-<script type="module">
-  import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect@3.7.0';
-  import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
-
-  // here use the lightning address provided by the user
-  const ln = new LightningAddress("rolznzfra@getalby.com");
-
-  await ln.fetch();
-  const invoice = await ln.requestInvoice({ satoshi: 21 });
-
-  const {setPaid} = launchPaymentModal({
-    invoice: 'lnbc...',
-    onPaid: (response) => {
-      clearInterval(checkPaymentInterval);
-      setTimeout(() => {
-        // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
-      }, 3000);
-    },
-    onCancelled: () => {
-      clearInterval(checkPaymentInterval);
-      alert('Payment cancelled');
-    },
+if (geminiApiKey) {
+  const modelName = "gemini-2.5-pro-exp-03-25";
+  const google = createGoogleGenerativeAI({
+    apiKey: geminiApiKey,
   });
+  chatModel = google(modelName);
+} else {
+  if (!openRouterApiKey) {
+    throw new Error("No API key provided");
+  }
+  //const modelName = "deepseek/deepseek-chat-v3-0324:free";
+  const modelName = "deepseek/deepseek-chat:free";
+  const openrouter = createOpenRouter({
+    apiKey: openRouterApiKey,
+  });
+  chatModel = openrouter.chat(modelName);
+}
 
-  const checkPaymentInterval = setInterval(async () => {
-    const paid = await invoice.verifyPayment();
-
-    if (paid && invoice.preimage) {
-      setPaid({
-        preimage: invoice.preimage,
-      });
-    }
-  }, 1000);
-
-</script>
-
-Here are the rules you MUST follow:
-
-**General:**
-- Analyze the user's prompt carefully to determine if a backend is necessary. Simple UI-only apps should only have HTML.
-- Only output the code itself, without any explanations or surrounding text like "Here is the code:".
-
-**HTML Generation (Always Required):**
-- The HTML output MUST be a single file.
-- All necessary HTML structure, CSS styles (inside <style> tags), and JavaScript logic (inside <script> tags) must be included within this single file.
-- Do NOT use external CSS or JavaScript files unless they are from a CDN (like esm.sh).
-- Do NOT link to external images unless specifically requested in the prompt.
-- Ensure the generated HTML code is valid, functional, and directly runnable in a browser.
-- Prefix all API request paths with: /PROXY/
-- If the app needs to interact with the backend, the frontend JavaScript should make fetch requests to the appropriate backend endpoints (assume the backend runs on the same origin but requests will be proxied).
-
-**Deno Backend Generation (Optional):**
-- If a backend is required, generate a single Deno TypeScript file.
-- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT <filename>\`.
-- The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
-- Use the standard Deno HTTP server (\`Deno.serve\`) or a simple framework like Oak if necessary.
-- The HTTP server must only have api endpoints. It should not serve static HTML.
-- Keep the backend simple and focused on the prompt's requirements.
-
-**Output Format:**
-- If ONLY HTML is generated, output just the HTML code.
-- If BOTH HTML and Deno code are generated, use the following format EXACTLY:
-
-<!-- HTML_START -->
-<!DOCTYPE html>
-<html>
-<head>
-  ...
-</head>
-<body>
-  ...
-  <script type="module">
-    // Frontend JS
-  </script>
-</body>
-</html>
-<!-- HTML_END -->
-
-// DENO_START
-import { serve } from "https://deno.land/std@0.140.0/http/server.ts"; // Or other imports
-
-const port = parseInt(Deno.env.get("PORT") || "8000");
-
-serve((req: Request) => {
-  // Backend logic here
-  return new Response("Hello from Deno!");
-}, { port });
-
-console.log(\`Deno server running on port \${port}\`);
-// DENO_END
-
-- Ensure the delimiters \`<!-- HTML_START -->\`, \`<!-- HTML_END -->\`, \`// DENO_START\`, and \`// DENO_END\` are present and correctly placed on their own lines when generating both files.
-`;
+const systemPrompt = generateSystemPrompt();
 
 // Helper async generator for the mock case
 async function* mockStream(): AsyncIterable<string> {
@@ -127,11 +52,10 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
   }
 
   // Normal case: return the textStream directly
-  const openrouter = createOpenRouter({
-    apiKey,
-  });
-  const chatModel = openrouter.chat(modelName);
+
   console.log("Streaming from OpenRouter for prompt:", prompt);
+
+  console.log("System prompt: ", systemPrompt);
 
   // Return the stream directly without awaiting or iterating here
   // Note: We need to wrap the streamText call in an async generator
@@ -141,6 +65,7 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
     const { textStream } = await streamText({
       model: chatModel,
       system: systemPrompt,
+      seed: 212121,
       prompt,
       onError: (event) => {
         throw new Error(
@@ -159,9 +84,6 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
 
 // Function to generate a short title for the app based on the prompt
 export const generateAppTitle = async (prompt: string): Promise<string> => {
-  const openrouter = createOpenRouter({ apiKey });
-  const chatModel = openrouter.chat(modelName);
-
   try {
     const { text } = await generateText({
       model: chatModel,
@@ -180,9 +102,6 @@ export const generateAppTitle = async (prompt: string): Promise<string> => {
 
 // Function to evaluate the clarity of the prompt and provide suggestions
 export const evaluatePrompt = async (prompt: string): Promise<string> => {
-  const openrouter = createOpenRouter({ apiKey });
-  const chatModel = openrouter.chat(modelName);
-
   // Combine the user prompt with the system prompt used for generation for context
   const fullPromptContext = `
 System Prompt for App Generation:

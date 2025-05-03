@@ -59,6 +59,8 @@ function AppStatusPage() {
   }, [appData]);
   const [showEditTitleModal, setShowEditTitleModal] = useState(false);
   const [appTitle, setAppTitle] = useState("");
+  const [showHtmlModal, setShowHtmlModal] = useState(false);
+  const [showBackendModal, setShowBackendModal] = useState(false);
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
@@ -622,7 +624,7 @@ function AppStatusPage() {
                       appData.state === "REVIEWING") &&
                     !!appData.html && (
                       <Button
-                        onClick={() => prompt("HTML", appData.html)}
+                        onClick={() => setShowHtmlModal(true)} // Update onClick
                         variant="outline"
                         size="sm"
                       >
@@ -634,7 +636,7 @@ function AppStatusPage() {
                       appData.state === "REVIEWING") &&
                     !!appData.denoCode && (
                       <Button
-                        onClick={() => prompt("HTML", appData.denoCode!)}
+                        onClick={() => setShowBackendModal(true)} // Update onClick
                         variant="outline"
                         size="sm"
                       >
@@ -902,6 +904,62 @@ function AppStatusPage() {
               </Button>
               <Button onClick={saveAppTitle}>Save</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View HTML Modal */}
+      {showHtmlModal && appData?.html && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View HTML</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.html || "")}
+                title="Copy HTML"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.html}
+            </pre>
+            <Button
+              onClick={() => setShowHtmlModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* View Backend Code Modal */}
+      {showBackendModal && appData?.denoCode && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View Backend Code</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.denoCode || "")}
+                title="Copy Backend Code"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.denoCode}
+            </pre>
+            <Button
+              onClick={() => setShowBackendModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
           </div>
         </div>
       )}

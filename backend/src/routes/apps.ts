@@ -117,7 +117,7 @@ async function appRoutes(
 
         // 3. Start generation in the background (fire and forget)
         // We don't await this promise
-        executePromptAndUpdateDb(fastify, prisma, denoManager, app.id, prompt); // Pass denoManager
+        executePromptAndUpdateDb(fastify, prisma, app.id, prompt); // Pass denoManager
       } catch (error) {
         fastify.log.error(
           error,
@@ -356,7 +356,7 @@ async function appRoutes(
       reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
 
       // Start generation in the background (fire and forget)
-      executePromptAndUpdateDb(fastify, prisma, denoManager, appId, prompt); // Pass denoManager
+      executePromptAndUpdateDb(fastify, prisma, appId, prompt); // Pass denoManager
     } catch (error) {
       fastify.log.error(error, `Failed to regenerate app for ID: ${appId}`);
       if (!reply.sent) {
@@ -594,6 +594,7 @@ function detectSection(chunk: string): string | undefined {
   if (chunk.includes("<body>")) return "HTML elements";
   if (chunk.includes("<script>")) return "app logic";
   if (chunk.includes("// DENO_START")) return "Backend logic";
+  // console.log("No section found: ", chunk);
   return undefined;
 }
 
@@ -601,7 +602,6 @@ function detectSection(chunk: string): string | undefined {
 async function executePromptAndUpdateDb(
   fastify: FastifyInstance,
   prisma: PrismaClient,
-  denoManager: DenoManager, // Add denoManager parameter
   appId: number,
   prompt: string
 ) {
@@ -616,7 +616,7 @@ async function executePromptAndUpdateDb(
     // Get the stream from the updated executePrompt
     const outputStream = executePrompt(prompt);
 
-    let prevChunk = "";
+    let currentLine = "";
     // Process the stream chunk by chunk
     for await (const chunk of outputStream) {
       if (generatedCharsCount === 0) {
@@ -629,10 +629,20 @@ async function executePromptAndUpdateDb(
       }
       fullOutput += chunk;
       generatedCharsCount += chunk.length;
+      currentLine += chunk;
+      let detectedSection: string | undefined;
 
-      // Detect section
-      const detectedSection = detectSection(prevChunk + chunk);
-      console.log("Detected section: " + detectedSection);
+      while (true) {
+        let newLineIndex = currentLine.indexOf("\n");
+        if (newLineIndex < 0) {
+          break;
+        }
+        const lineToCheck = currentLine.slice(0, newLineIndex + 1);
+        currentLine = currentLine.slice(newLineIndex + 1);
+        // Detect section
+        //console.log("Checking line", lineToCheck);
+        detectedSection = detectSection(lineToCheck) || detectedSection;
+      }
 
       // Throttle DB updates (numChars and generatingSection)
       const now = Date.now();
@@ -659,7 +669,6 @@ async function executePromptAndUpdateDb(
           );
         }
       }
-      prevChunk = chunk;
     }
 
     // --- Parse the full output ---

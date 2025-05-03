@@ -122,15 +122,24 @@ export class DenoManager {
       const tempDir = path.join(os.tmpdir(), "lnfly_deno_apps");
       await fs.mkdir(tempDir, { recursive: true });
       const tempFilePath = path.join(tempDir, `app_${appId}_${Date.now()}.ts`);
-      await fs.writeFile(tempFilePath, app.denoCode);
+
+      let processedDenoCode = app.denoCode;
+      // in case the AI is dumb and also adds the proxy on the backend too
+      processedDenoCode = processedDenoCode.replaceAll("/PROXY/", "/");
+
+      await fs.writeFile(tempFilePath, processedDenoCode);
       console.log(`Deno code for app ${appId} written to ${tempFilePath}`);
 
       // 5. Spawn Deno Process
       const denoProcess = spawn(
         "deno",
-        ["run", "--allow-net", "--allow-env=PORT", tempFilePath],
+        ["run", "--allow-net", "--allow-env=PORT,NWC_URL", tempFilePath],
         {
-          env: { ...process.env, PORT: port.toString() },
+          env: {
+            ...process.env,
+            PORT: port.toString(),
+            NWC_URL: process.env.DEFAULT_NWC_URL,
+          },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr
         }
       );

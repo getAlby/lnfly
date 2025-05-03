@@ -68,10 +68,16 @@ const signals: NodeJS.Signals[] = ["SIGINT", "SIGTERM"];
 signals.forEach((signal) => {
   process.on(signal, async () => {
     fastify.log.info(`Received ${signal}, shutting down gracefully...`);
+    fastify.log.info("Stopping Deno backends...");
     await denoManager.stopAllBackends(); // Stop Deno processes first
+    fastify.log.info("Deno backends stop initiated.");
+    fastify.log.info("Closing Fastify server...");
     await fastify.close();
+    fastify.log.info("Fastify server closed.");
+    fastify.log.info("Disconnecting Prisma...");
     await prisma.$disconnect(); // Disconnect Prisma
-    fastify.log.info("Server shut down.");
+    fastify.log.info("Prisma disconnected.");
+    fastify.log.info("Server shut down complete.");
     process.exit(0);
   });
 });
