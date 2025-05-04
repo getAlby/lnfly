@@ -640,9 +640,7 @@ function AppStatusPage() {
                     <Textarea
                       value={promptText} // Use state for value
                       onChange={(e) => setPromptText(e.target.value)} // Update state on change
-                      readOnly={
-                        appData.published || appData.state !== "COMPLETED"
-                      } // Editable only if unpublished
+                      readOnly={appData.published} // Editable only if unpublished
                       className={`pr-10 ${appData.published ? "bg-muted" : ""}`} // Adjust style when read-only
                     />
                     <Button
