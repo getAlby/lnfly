@@ -70,3 +70,9 @@ yarn install
 yarn prisma migrate dev
 yarn start
 ```
+
+## Deploy
+
+### Fly
+
+Install fly and run `fly launch` and then set appropriate secrets using `fly secrets set KEY=VALUE` based on your .env

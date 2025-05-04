@@ -32,6 +32,11 @@ RUN yarn build
 # ---- Production Stage ----
 FROM node:22-alpine
 
+# Install Deno dependencies and Deno itself
+RUN apk add --no-cache curl unzip
+RUN curl -fsSL https://deno.land/x/install/install.sh | sh
+ENV PATH="/root/.deno/bin:$PATH"
+
 WORKDIR /app
 
 # Copy backend package files and install production dependencies
