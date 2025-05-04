@@ -10,7 +10,12 @@ import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { SystemPromptSegmentName } from "../../../backend/src/ai/systemPrompt";
+
+type SystemPromptSegmentName =
+  | "bitcoin connect (payment modal)"
+  | "bitcoin connect (WebLN)"
+  | "lightning tools"
+  | "NWC";
 
 // Define the expected structure of the app data from the API
 // Define possible backend states from Prisma enum
