@@ -5,6 +5,7 @@
 
 app = 'lnfly'
 primary_region = 'fra'
+swap_size_mb = 2048
 
 [build]
 

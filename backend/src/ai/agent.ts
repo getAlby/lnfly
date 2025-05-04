@@ -1,88 +1,97 @@
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { generateText, streamText } from "ai";
-import fs from "fs";
-import path from "path";
+import { generateText, LanguageModelV1, streamText } from "ai";
+import {
+  buildSystemPrompt,
+  optionalSystemPromptSegments,
+  SystemPromptSegmentName,
+} from "./systemPrompt";
 
-const apiKey = process.env.OPENROUTER_API_KEY;
-const modelName = "deepseek/deepseek-chat-v3-0324:free";
+const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+const geminiApiKey = process.env.GEMINI_API_KEY;
+let chatModel: LanguageModelV1;
 
-const systemPrompt = `You are an expert web developer AI. Your task is to generate a complete, single-file HTML application based on a user's prompt.
-
-You know how to use bitcoin connect and lightning tools to accept payments:
-
-<script type="module">
-  import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect@3.7.0';
-  import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
-
-  // here use the lightning address provided by the user
-  const ln = new LightningAddress("rolznzfra@getalby.com");
-
-  await ln.fetch();
-  const invoice = await ln.requestInvoice({ satoshi: 21 });
-
-  const {setPaid} = launchPaymentModal({
-    invoice: 'lnbc...',
-    onPaid: (response) => {
-      clearInterval(checkPaymentInterval);
-      setTimeout(() => {
-        // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
-      }, 3000);
-    },
-    onCancelled: () => {
-      clearInterval(checkPaymentInterval);
-      alert('Payment cancelled');
-    },
+if (geminiApiKey) {
+  const modelName = "gemini-2.5-pro-exp-03-25";
+  const google = createGoogleGenerativeAI({
+    apiKey: geminiApiKey,
   });
-
-  const checkPaymentInterval = setInterval(async () => {
-    const paid = await invoice.verifyPayment();
-
-    if (paid && invoice.preimage) {
-      setPaid({
-        preimage: invoice.preimage,
-      });
-    }
-  }, 1000);
-
-</script>
-
-Here are the rules you MUST follow.
-- The output MUST be a single HTML file.
-- All necessary HTML structure, CSS styles (inside <style> tags), and JavaScript logic (inside <script> tags) must be included within this single file.
-- Do NOT use external CSS or JavaScript files unless they are from a CDN.
-- Do NOT link to external images unless specifically requested in the prompt.
-- Ensure the generated code is valid, functional, and directly runnable in a browser.
-- Only output the HTML code itself, without any explanations or surrounding text.
-`;
-
-// Helper async generator for the mock case
-async function* mockStream(): AsyncIterable<string> {
-  await new Promise((resolve) => setTimeout(resolve, 3000)); // Simulate delay
-  const mockOutputPath = path.join(__dirname, "mock-output.html");
-  try {
-    const fileContent = fs.readFileSync(mockOutputPath, "utf-8");
-    yield fileContent; // Yield the content as a single chunk
-  } catch (error) {
-    console.error("Error reading mock output file:", error);
-    yield `<p>Error loading content.</p>`; // Yield an error message
+  chatModel = google(modelName);
+} else {
+  if (!openRouterApiKey) {
+    throw new Error("No API key provided");
   }
+  const modelName = "deepseek/deepseek-chat-v3-0324:free";
+  //const modelName = "deepseek/deepseek-chat:free";
+  const openrouter = createOpenRouter({
+    apiKey: openRouterApiKey,
+  });
+  chatModel = openrouter.chat(modelName);
 }
 
-// Updated function signature to return AsyncIterable<string>
-export const executePrompt = (prompt: string): AsyncIterable<string> => {
-  // Handle the mock case by returning the async generator
-  if (prompt === "MOCK_OUTPUT") {
-    // Simplified check
-    console.log("Using mock stream for 'snake' prompt.");
-    return mockStream();
+export const generateSystemPrompt = async (prompt: string, seed: number) => {
+  const segmentPrompts: string[] = [];
+  let segmentNames: string[] = [];
+  try {
+    const { text } = await generateText({
+      model: chatModel,
+      system: `You are an expert software architect. Your task is to review the given prompt and figure out which additional knowledge we need. Here are the segments: ${JSON.stringify(
+        optionalSystemPromptSegments.map((segment) => ({
+          name: segment.name,
+          usecase: segment.usecase,
+          environment: segment.environment,
+        }))
+      )}. Pay special care to the usecase and environment ("frontend" = it can only be used in the html app, "backend" = it can only be used in the deno code, "any" = can be used in both.)
+      
+      MANDATORY INSTRUCTIONS:
+      Return the EXACT names (exact characters and casing) of the segments from the provided JSON that you think should be used as a JSON string array, without any explanations or surrounding text.`,
+      prompt,
+      seed,
+    });
+    console.log("Got segment names:", text);
+
+    let arrayStart = text.indexOf("[");
+    let arrayEnd = text.lastIndexOf("]");
+    const extractedText = text.slice(arrayStart, arrayEnd + 1);
+
+    segmentNames = JSON.parse(extractedText) as SystemPromptSegmentName[];
+    if (!Array.isArray(segmentNames)) {
+      throw new Error("segment names is not an array");
+    }
+
+    for (const name of segmentNames) {
+      const segment = optionalSystemPromptSegments.find(
+        (segment) => segment.name === name
+      );
+      if (!segment) {
+        throw new Error("Unknown segment: " + name);
+      }
+      segmentPrompts.push(segment.prompt);
+    }
+
+    if (!segmentPrompts.length) {
+      throw new Error("No segments found!");
+    }
+  } catch (error) {
+    console.error("Error generating finding parts for system prompt:", error);
+    // Return a generic title or re-throw, depending on desired handling
+    throw error;
   }
 
-  // Normal case: return the textStream directly
-  const openrouter = createOpenRouter({
-    apiKey,
-  });
-  const chatModel = openrouter.chat(modelName);
+  const systemPrompt = buildSystemPrompt(segmentPrompts);
+
+  return { systemPrompt, segmentNames };
+};
+
+// Updated function signature to return AsyncIterable<string>
+export const executePrompt = (
+  prompt: string,
+  systemPrompt: string,
+  seed: number
+): AsyncIterable<string> => {
   console.log("Streaming from OpenRouter for prompt:", prompt);
+
+  console.log("System prompt: ", systemPrompt);
 
   // Return the stream directly without awaiting or iterating here
   // Note: We need to wrap the streamText call in an async generator
@@ -92,6 +101,7 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
     const { textStream } = await streamText({
       model: chatModel,
       system: systemPrompt,
+      seed,
       prompt,
       onError: (event) => {
         throw new Error(
@@ -109,15 +119,16 @@ export const executePrompt = (prompt: string): AsyncIterable<string> => {
 };
 
 // Function to generate a short title for the app based on the prompt
-export const generateAppTitle = async (prompt: string): Promise<string> => {
-  const openrouter = createOpenRouter({ apiKey });
-  const chatModel = openrouter.chat(modelName);
-
+export const generateAppTitle = async (
+  html: string,
+  seed: number
+): Promise<string> => {
   try {
     const { text } = await generateText({
       model: chatModel,
-      system: `You are an expert copywriter. Your task is to generate a concise and catchy title for a web application based on the user's prompt describing the app. The title MUST be less than 6 words long. Only output the title itself, without any explanations or surrounding text. The first word must start with a capital letter and the title must be made of real words.`,
-      prompt: `Generate a title for an app described as follows: "${prompt}"`,
+      system: `You are an expert copywriter. Your task is to generate a concise and catchy title for a web application based on the given HTML. If you find a title in the app, use that. Otherwise, generate one. Only output the title itself, without any explanations or surrounding text.`,
+      prompt: `Generate a title for an app described as follows: "${html}"`,
+      seed,
     });
     console.log("Generated title:", text);
     // Basic cleanup: remove potential quotes and trim whitespace
@@ -130,10 +141,11 @@ export const generateAppTitle = async (prompt: string): Promise<string> => {
 };
 
 // Function to evaluate the clarity of the prompt and provide suggestions
-export const evaluatePrompt = async (prompt: string): Promise<string> => {
-  const openrouter = createOpenRouter({ apiKey });
-  const chatModel = openrouter.chat(modelName);
-
+export const evaluatePrompt = async (
+  prompt: string,
+  systemPrompt: string,
+  seed: number
+): Promise<string> => {
   // Combine the user prompt with the system prompt used for generation for context
   const fullPromptContext = `
 System Prompt for App Generation:
@@ -156,7 +168,7 @@ ${prompt}
       1. Read the entire prompt context carefully (system instructions + user prompt).
       2. Evaluate how clear and unambiguous the user's prompt is for the web development AI, considering the system instructions and constraints. DO NOT evaluate the system prompt!
       3. Assign a clarity score from 1 (very unclear, ambiguous, likely to fail) to 10 (perfectly clear, specific, unambiguous).
-      4. Identify the main areas where the user's prompt could be improved for better results. List these as bullet points, ordered by importance (most critical improvement first). Focus on aspects that might lead to misinterpretation or incomplete generation by the web development AI, (such as: when and where payments should be made and what should happen after a payment is successfully made).
+      4. Identify the main areas where the user's prompt could be improved for better results. List these as bullet points, ordered by importance (most critical improvement first). Focus on aspects that might lead to misinterpretation or incomplete generation by the web development AI.
       5. Format your output EXACTLY as follows:
          Score: [Your Score]/10
 
@@ -167,6 +179,7 @@ ${prompt}
 
       Only output the score and suggestions in this format. Do not include any other explanations or introductory text.`,
       prompt: `Evaluate the following prompt context:\n\n${fullPromptContext}`,
+      seed,
     });
     console.log("Generated prompt evaluation:", text);
     return text.trim();

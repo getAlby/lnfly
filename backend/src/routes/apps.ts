@@ -1,22 +1,31 @@
-import { AppState, PrismaClient } from "@prisma/client"; // Import Prisma Client & Enum
+import { AppState, BackendState, PrismaClient } from "@prisma/client"; // Import Prisma Client & Enums
 import {
   FastifyInstance,
   FastifyPluginOptions,
   FastifyReply,
   FastifyRequest,
 } from "fastify";
-import { evaluatePrompt, executePrompt, generateAppTitle } from "../ai/agent";
+import {
+  evaluatePrompt,
+  executePrompt,
+  generateAppTitle,
+  generateSystemPrompt,
+} from "../ai/agent";
+import { DenoManager } from "../deno_manager"; // Import DenoManager
 
 // Define the expected options structure passed during registration
 interface AppRoutesOptions extends FastifyPluginOptions {
-  prisma: PrismaClient; // Add prisma
+  prisma: PrismaClient;
+  denoManager: DenoManager; // Add denoManager
 }
 
 async function appRoutes(
   fastify: FastifyInstance,
   options: AppRoutesOptions // Use updated options type
 ) {
-  const { prisma } = options; // Destructure prisma from options
+  const { prisma, denoManager } = options; // Destructure prisma and denoManager
+
+  // --- Route Definitions ---
 
   // Define the expected body structure for creating an app
   interface CreateAppBody {
@@ -115,7 +124,7 @@ async function appRoutes(
 
         // 3. Start generation in the background (fire and forget)
         // We don't await this promise
-        executePromptAndUpdateDb(fastify, prisma, app.id, prompt);
+        executePromptAndUpdateDb(fastify, prisma, app.id, prompt); // Pass denoManager
       } catch (error) {
         fastify.log.error(
           error,
@@ -146,6 +155,7 @@ async function appRoutes(
       try {
         const app = await prisma.app.findUnique({
           where: { id: appId },
+          // Select all fields needed, including new backend fields
         });
 
         if (!app) {
@@ -161,16 +171,29 @@ async function appRoutes(
           ...(request.query.editKey === app.editKey
             ? {
                 errorMessage: app.errorMessage,
-                promptSuggestions: app.promptSuggestions, // Add promptSuggestions here
+                promptSuggestions: app.promptSuggestions,
+                // Include backend details only if editKey matches
+                denoCode: app.denoCode,
+                backendState: app.backendState,
+                backendPort: app.backendPort,
+                generatingSection: app.generatingSection,
+                systemPrompt: app.systemPrompt,
+                nwcUrl: app.nwcUrl,
               }
             : {}),
           ...(app.published || request.query.editKey === app.editKey
             ? {
+                // Publicly visible or previewable fields
                 html: app.html,
                 lightningAddress: app.lightningAddress,
                 prompt: app.prompt,
                 numChars: app.numChars,
                 title: app.title,
+                seed: app.seed,
+                systemPromptSegmentNames: app.systemPromptSegmentNames
+                  ?.split(",")
+                  .map((name) => name.trim()),
+                // Do NOT expose denoCode/backend details here unless editKey matches (handled above)
               }
             : {}),
         };
@@ -187,11 +210,13 @@ async function appRoutes(
   interface UpdateAppBody {
     published?: boolean;
     lightningAddress?: string;
-    title?: string; // Add title field
-    // Add other updatable fields here later
+    nwcUrl?: string; // Add nwcUrl field
+    title?: string;
+    state?: AppState; // Add state field
+    errorMessage?: string | null; // Add errorMessage field
   }
 
-  // Route to update an app (e.g., publish)
+  // Route to update an app (e.g., publish, cancel)
   fastify.put<{
     Params: { id: string };
     Querystring: { editKey?: string };
@@ -199,7 +224,8 @@ async function appRoutes(
   }>("/:id", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { published, lightningAddress, title } = request.body; // Extract title
+    const { published, lightningAddress, nwcUrl, title, state, errorMessage } =
+      request.body; // Extract nwcUrl // Extract new fields
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -211,9 +237,19 @@ async function appRoutes(
     }
 
     // Ensure at least one updatable field is provided
-    if (published === undefined && !lightningAddress && title === undefined) {
-      // Update validation
+    if (
+      published === undefined &&
+      lightningAddress === undefined &&
+      nwcUrl === undefined && // Check nwcUrl
+      title === undefined &&
+      state === undefined &&
+      errorMessage === undefined
+    ) {
       return reply.code(400).send({ message: "No updatable fields provided." });
+    }
+
+    if (state && state !== "FAILED") {
+      return reply.code(400).send({ message: "Can only set state to FAILED." });
     }
 
     try {
@@ -234,21 +270,27 @@ async function appRoutes(
       const updatedApp = await prisma.app.update({
         where: { id: appId },
         data: {
+          // Pass all potentially undefined fields directly
           published,
           lightningAddress,
+          nwcUrl, // Add nwcUrl to update data
           title,
+          state,
+          errorMessage,
         },
         select: {
           id: true,
           published: true,
           lightningAddress: true,
-          title: true, // Select title to return it
-          // Select other fields to return if needed
+          nwcUrl: true, // Select updated nwcUrl
+          title: true,
+          state: true, // Select updated state
+          errorMessage: true, // Select updated error message
         },
       });
 
       fastify.log.info(
-        `App ${appId} updated. Published: ${updatedApp.published}, Title: ${updatedApp.title}` // Update log
+        `App ${appId} updated. Data: ${JSON.stringify(updatedApp)}`
       );
 
       return reply.send(updatedApp);
@@ -317,15 +359,23 @@ async function appRoutes(
           html: null, // Clear previous results
           numChars: 0,
           errorMessage: null,
-          title: null, // Reset title as well
+          title: null,
+          denoCode: null, // Clear deno code on regenerate
+          backendState: BackendState.STOPPED, // Reset backend state
+          backendPort: null,
+          systemPrompt: null,
+          systemPromptSegmentNames: null,
         },
       });
+
+      // Stop any potentially running backend for this app before regenerating
+      await denoManager.stopAppBackend(appId);
 
       fastify.log.info(`App ${appId} regeneration requested with new prompt.`);
       reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
 
       // Start generation in the background (fire and forget)
-      executePromptAndUpdateDb(fastify, prisma, appId, prompt);
+      executePromptAndUpdateDb(fastify, prisma, appId, prompt); // Pass denoManager
     } catch (error) {
       fastify.log.error(error, `Failed to regenerate app for ID: ${appId}`);
       if (!reply.sent) {
@@ -376,21 +426,246 @@ async function appRoutes(
             .send({ message: "App completed but no content found." });
         }
 
+        // Handle backend activity (reset timer or auto-start)
+        // We don't need to block the view based on the result here.
+        handleBackendActivity(appId, app, denoManager, fastify.log);
+
         // Send the HTML content
-        let htmlWithLightningAddress = app.html;
+        let processedHtml = app.html; // Start with original HTML
         if (app.lightningAddress) {
-          htmlWithLightningAddress = htmlWithLightningAddress.replaceAll(
+          processedHtml = processedHtml.replaceAll(
             "rolznzfra@getalby.com",
             app.lightningAddress
           );
         }
-        return reply.type("text/html").send(htmlWithLightningAddress);
+        // Replace /PROXY paths with the backend proxy path
+        // Use regex to ensure we only match the beginning of the path segment in attributes
+        // Handles both double and single quotes
+        processedHtml = processedHtml.replaceAll(
+          `/PROXY/`,
+          `/api/apps/${appId}/proxy/`
+        );
+
+        return reply.type("text/html").send(processedHtml); // Send the fully processed HTML
       } catch (error) {
         fastify.log.error(error, `Failed to fetch app view for ID: ${appId}`);
         return reply.code(500).send({ message: "Internal Server Error." });
       }
     }
   );
+
+  // --- Backend Control Routes ---
+
+  // Route to start the Deno backend
+  fastify.post<{ Params: { id: string }; Querystring: { editKey?: string } }>(
+    "/:id/backend/start",
+    async (request, reply) => {
+      const { id } = request.params;
+      const { editKey } = request.query;
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+      if (!editKey) {
+        return reply.code(401).send({ message: "Edit key is required." });
+      }
+
+      try {
+        const app = await prisma.app.findUnique({ where: { id: appId } });
+        if (!app) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+        if (editKey !== app.editKey) {
+          return reply.code(403).send({ message: "Invalid edit key." });
+        }
+        if (!app.denoCode) {
+          return reply.code(400).send({ message: "App has no backend code." });
+        }
+
+        // Call manager to start (non-blocking)
+        denoManager.startAppBackend(appId);
+
+        // Give it a moment to potentially update state, then fetch latest
+        await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay
+        const updatedApp = await prisma.app.findUnique({
+          where: { id: appId },
+        });
+
+        return reply.send({ backendState: updatedApp?.backendState });
+      } catch (error) {
+        fastify.log.error(
+          error,
+          `Failed to start backend for app ID: ${appId}`
+        );
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+
+  // Route to stop the Deno backend
+  fastify.post<{ Params: { id: string }; Querystring: { editKey?: string } }>(
+    "/:id/backend/stop",
+    async (request, reply) => {
+      const { id } = request.params;
+      const { editKey } = request.query;
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+      if (!editKey) {
+        return reply.code(401).send({ message: "Edit key is required." });
+      }
+
+      try {
+        const app = await prisma.app.findUnique({ where: { id: appId } });
+        if (!app) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+        if (editKey !== app.editKey) {
+          return reply.code(403).send({ message: "Invalid edit key." });
+        }
+
+        // Call manager to stop (non-blocking)
+        denoManager.stopAppBackend(appId);
+
+        // Give it a moment to potentially update state, then fetch latest
+        await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay
+        const updatedApp = await prisma.app.findUnique({
+          where: { id: appId },
+        });
+
+        return reply.send({ backendState: updatedApp?.backendState });
+      } catch (error) {
+        fastify.log.error(error, `Failed to stop backend for app ID: ${appId}`);
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+  // --- Proxy Route ---
+
+  // Route to proxy requests to the running Deno backend
+  fastify.all<{ Params: { id: string; "*": string } }>(
+    "/:id/proxy/*",
+    async (request, reply) => {
+      const { id } = request.params;
+      const targetPath = request.params["*"]; // Get the path after /proxy/
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+
+      try {
+        // Fetch app details needed for proxying and activity check
+        const app = await prisma.app.findUnique({
+          where: { id: appId },
+          select: {
+            backendPort: true,
+            backendState: true,
+            denoCode: true,
+          },
+        });
+
+        if (!app) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+
+        // Handle backend activity and check readiness for proxying
+        const activityStatus = handleBackendActivity(
+          appId,
+          app,
+          denoManager,
+          fastify.log
+        );
+
+        switch (activityStatus) {
+          case "READY":
+            // Backend is running, proceed to proxy
+            if (!app.backendPort) {
+              // This case should theoretically not be reachable if status is READY
+              fastify.log.error(
+                `App ${appId} is RUNNING but has no backendPort assigned in proxy route!`
+              );
+              return reply
+                .code(500)
+                .send({ message: "Internal configuration error." });
+            }
+            break; // Continue to proxy logic below
+
+          case "STARTING":
+            // Backend was stopped, auto-start triggered
+            return reply.code(503).send({
+              message: "Backend starting, please retry shortly.",
+              code: "BACKEND_STARTING",
+            });
+
+          case "BUSY":
+            // Backend is STARTING or STOPPING
+            return reply.code(503).send({
+              message: `Backend is currently ${app.backendState}. Please wait.`,
+              code: `BACKEND_${app.backendState}`, // e.g., BACKEND_STARTING
+            });
+
+          case "NO_BACKEND":
+            // App has no backend code defined
+            return reply
+              .code(400)
+              .send({ message: "Proxy request for app with no backend code." });
+
+          default:
+            // Should not happen
+            fastify.log.error(
+              `Unhandled BackendActivityStatus: ${activityStatus}`
+            );
+            return reply.code(500).send({ message: "Internal Server Error." });
+        }
+
+        // If we reach here, activityStatus must be 'READY' and app.backendPort must exist
+        const targetUrl = `http://localhost:${app.backendPort}/${targetPath}`;
+
+        fastify.log.info(
+          `Proxying request for app ${appId}: ${request.method} ${request.url} -> ${targetUrl}`
+        );
+
+        // Forward the request using reply.from
+        // It automatically handles method, headers, query string, and body
+        return reply.from(targetUrl, {
+          // Optional: Handle potential errors during proxying
+          onError: (reply, error) => {
+            fastify.log.error(
+              error,
+              `Proxy error for app ${appId} to ${targetUrl}`
+            );
+            // Avoid sending reply twice if headers already sent
+            if (!reply.sent) {
+              reply
+                .code(500)
+                .send({ message: "Proxy error", error: error.error });
+            }
+          },
+        });
+      } catch (error) {
+        fastify.log.error(
+          error,
+          `Failed to process proxy request for app ID: ${appId}`
+        );
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+}
+
+// Helper function to detect the current generation section
+function detectSection(chunk: string): string | undefined {
+  if (chunk.includes("<!-- HTML_START -->")) return "HTML";
+  if (chunk.includes("<style>")) return "styles";
+  if (chunk.includes("<body>")) return "HTML elements";
+  if (chunk.includes("<script>")) return "app logic";
+  if (chunk.includes("// DENO_START")) return "Backend logic";
+  // console.log("No section found: ", chunk);
+  return undefined;
 }
 
 // Helper function to run generation and update DB
@@ -400,36 +675,68 @@ async function executePromptAndUpdateDb(
   appId: number,
   prompt: string
 ) {
-  let generatedHtml = "";
+  let fullOutput = ""; // Store the full AI output
+  let generatedHtml: string | null = null;
+  let generatedDenoCode: string | null = null;
   let generatedCharsCount = 0;
   let lastUpdateTime = 0; // Track last DB update time for throttling
   const throttleInterval = 1000; // Update DB at most every 1 second
+  const seed = Math.floor(Math.random() * 21_000_000);
 
   try {
-    // Get the stream from the updated executePrompt
-    const htmlStream = executePrompt(prompt); // Now returns AsyncIterable<string>
+    // based on the prompt we give it specific knowledge
+    const { systemPrompt, segmentNames } = await generateSystemPrompt(
+      prompt,
+      seed
+    );
 
+    await prisma.app.update({
+      where: { id: appId },
+      data: { systemPrompt, systemPromptSegmentNames: segmentNames.join(",") },
+    });
+
+    // Get the stream from the updated executePrompt
+    const outputStream = executePrompt(prompt, systemPrompt, seed);
+
+    let currentLine = "";
     // Process the stream chunk by chunk
-    for await (const chunk of htmlStream) {
+    for await (const chunk of outputStream) {
       if (generatedCharsCount === 0) {
         // Mark as GENERATING once we get first chunk back
         await prisma.app.update({
           where: { id: appId },
-          data: { state: AppState.GENERATING },
+          data: { state: AppState.GENERATING, seed },
         });
         fastify.log.info(`App ${appId} state changed to GENERATING.`);
       }
-      generatedHtml += chunk;
+      fullOutput += chunk;
       generatedCharsCount += chunk.length;
+      currentLine += chunk;
+      let detectedSection: string | undefined;
 
-      // Throttle numChars updates to the DB
+      while (true) {
+        let newLineIndex = currentLine.indexOf("\n");
+        if (newLineIndex < 0) {
+          break;
+        }
+        const lineToCheck = currentLine.slice(0, newLineIndex + 1);
+        currentLine = currentLine.slice(newLineIndex + 1);
+        // Detect section
+        //console.log("Checking line", lineToCheck);
+        detectedSection = detectSection(lineToCheck) || detectedSection;
+      }
+
+      // Throttle DB updates (numChars and generatingSection)
       const now = Date.now();
-      if (now - lastUpdateTime > throttleInterval) {
+      if (now - lastUpdateTime > throttleInterval || detectedSection) {
         try {
           await prisma.app.update({
             where: { id: appId },
-            // Update only numChars and keep state as GENERATING
-            data: { numChars: generatedCharsCount },
+            // Update numChars and potentially generatingSection
+            data: {
+              numChars: generatedCharsCount,
+              generatingSection: detectedSection,
+            },
           });
           lastUpdateTime = now;
           // Use debug level for potentially frequent logs
@@ -440,23 +747,43 @@ async function executePromptAndUpdateDb(
           // Log error but continue processing stream
           fastify.log.error(
             dbUpdateError,
-            `Failed periodic numChars update for app ${appId}`
+            `Failed periodic DB update (numChars/section) for app ${appId}`
           );
         }
       }
     }
 
-    const htmlStart = generatedHtml.indexOf("<html");
-    const htmlEnd = generatedHtml.indexOf("</html>");
-    if (htmlStart < 0 || htmlEnd < 0) {
-      throw new Error(
-        "Could not find HTML in generated response: " + generatedHtml
-      );
+    // --- Parse the full output ---
+    const htmlStartMarker = "<html>";
+    const htmlEndMarker = "</html>";
+    const denoStartMarker = "// DENO_START";
+    const denoEndMarker = "// DENO_END";
+
+    const htmlStartIndex = fullOutput.indexOf(htmlStartMarker);
+    const htmlEndIndex = fullOutput.indexOf(htmlEndMarker);
+    const denoStartIndex = fullOutput.indexOf(denoStartMarker);
+    const denoEndIndex = fullOutput.indexOf(denoEndMarker);
+
+    if (htmlStartIndex !== -1 && htmlEndIndex !== -1) {
+      generatedHtml = fullOutput
+        .substring(htmlStartIndex, htmlEndIndex + htmlEndMarker.length)
+        .trim();
+    } else {
+      // Assume the whole output is HTML if markers are missing
+      generatedHtml = fullOutput.trim();
     }
-    generatedHtml = generatedHtml.substring(
-      htmlStart,
-      htmlEnd + "</html>".length
-    );
+
+    if (denoStartIndex !== -1 && denoEndIndex !== -1) {
+      generatedDenoCode = fullOutput
+        .substring(denoStartIndex + denoStartMarker.length, denoEndIndex)
+        .trim();
+    }
+
+    // Basic validation
+    if (!generatedHtml || !generatedHtml.toLowerCase().includes("<html")) {
+      throw new Error("Failed to extract valid HTML from the AI response.");
+    }
+    // --- End Parsing ---
 
     // Update state to REVIEWING before generating title/suggestions
     fastify.log.info(`App ${appId} updating state to REVIEWING.`);
@@ -464,16 +791,18 @@ async function executePromptAndUpdateDb(
       where: { id: appId },
       data: {
         state: AppState.REVIEWING,
-        html: generatedHtml, // Save the generated HTML here too
+        html: generatedHtml, // Save extracted HTML
         numChars: generatedCharsCount, // Ensure count is saved before review
+        denoCode: generatedDenoCode, // Save extracted Deno code (null if not generated)
+        backendState: generatedDenoCode ? BackendState.STOPPED : undefined, // Set initial backend state if code exists
       },
     });
 
     // Generate title and evaluate prompt after successful HTML generation
     fastify.log.info(`App ${appId} generating title and evaluating prompt...`);
     const [generatedTitle, promptEvaluation] = await Promise.all([
-      generateAppTitle(prompt),
-      evaluatePrompt(prompt),
+      generateAppTitle(generatedHtml, seed),
+      evaluatePrompt(prompt, systemPrompt, seed),
     ]);
     fastify.log.info(
       `App ${appId} title: ${generatedTitle}, evaluation score: ${
@@ -487,13 +816,27 @@ async function executePromptAndUpdateDb(
       data: {
         // html and numChars already saved before REVIEWING state
         state: AppState.COMPLETED,
-        title: generatedTitle, // Add generated title
-        promptSuggestions: promptEvaluation, // Add prompt evaluation
+        title: generatedTitle,
+        promptSuggestions: promptEvaluation,
+        generatingSection: null, // Clear generating section on completion
       },
     });
     fastify.log.info(
-      `App ${appId} generation COMPLETED with title and evaluation.`
+      `App ${appId} generation COMPLETED. Deno code generated: ${!!generatedDenoCode}`
     );
+
+    // Start Deno backend if code was generated
+    if (generatedDenoCode) {
+      // TODO: could consider enabling here
+      /*fastify.log.info(`Triggering backend start for app ${appId}...`);
+      // Don't await, let it run in the background
+      denoManager.startAppBackend(appId).catch((err) => {
+        fastify.log.error(
+          err,
+          `Error during initial backend start for app ${appId}`
+        );
+      });*/
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     fastify.log.error(error, `Failed generation for app ID: ${appId}`);
@@ -520,3 +863,55 @@ async function executePromptAndUpdateDb(
 }
 
 export default appRoutes;
+
+// --- Helper Function for Backend Activity ---
+
+type BackendActivityStatus = "READY" | "STARTING" | "BUSY" | "NO_BACKEND";
+
+/**
+ * Checks backend status, resets inactivity timer if running,
+ * or attempts to auto-start if stopped.
+ * Returns a status indicating the backend's readiness for proxying.
+ */
+function handleBackendActivity(
+  appId: number,
+  app: { denoCode: string | null; backendState: BackendState | null },
+  denoManager: DenoManager,
+  logger: FastifyInstance["log"]
+): BackendActivityStatus {
+  if (!app.denoCode) {
+    return "NO_BACKEND";
+  }
+
+  switch (app.backendState) {
+    case BackendState.RUNNING:
+      denoManager.resetInactivityTimer(appId);
+      return "READY";
+
+    case BackendState.STOPPED:
+    case BackendState.FAILED_TO_START:
+      logger.info(
+        `Attempting to auto-start backend for app ${appId} due to activity.`
+      );
+      // Start backend (fire-and-forget)
+      denoManager.startAppBackend(appId).catch((err) => {
+        logger.error(
+          err,
+          `Error auto-starting backend for app ${appId} on activity`
+        );
+      });
+      return "STARTING"; // Indicate that start was triggered
+
+    case BackendState.STARTING:
+    case BackendState.STOPPING:
+      logger.info(`Backend for app ${appId} is busy (${app.backendState}).`);
+      return "BUSY";
+
+    default:
+      // Should not happen, but treat unknown/null state as busy
+      logger.warn(
+        `Unexpected backend state for app ${appId}: ${app.backendState}`
+      );
+      return "BUSY";
+  }
+}

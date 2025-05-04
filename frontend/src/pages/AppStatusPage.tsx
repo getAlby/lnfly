@@ -1,4 +1,5 @@
 import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
+import { Badge } from "@/components/ui/badge"; // Import Badge
 import { Button } from "@/components/ui/button"; // Import Button
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
 import { Input } from "@/components/ui/input";
@@ -9,44 +10,65 @@ import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { SystemPromptSegmentName } from "../../../backend/src/ai/systemPrompt";
 
 // Define the expected structure of the app data from the API
+// Define possible backend states from Prisma enum
+type BackendState =
+  | "STOPPED"
+  | "STARTING"
+  | "RUNNING"
+  | "STOPPING"
+  | "FAILED_TO_START";
+
 interface AppData {
   id: number;
   title: string | null;
-  // prompt: string; // We might not need the full prompt here
-  state: "INITIALIZING" | "GENERATING" | "REVIEWING" | "COMPLETED" | "FAILED"; // Add REVIEWING state
+  state: "INITIALIZING" | "GENERATING" | "REVIEWING" | "COMPLETED" | "FAILED";
   numChars?: number;
+  html?: string;
   prompt?: string;
   errorMessage?: string;
-  promptSuggestions?: string | null; // Add prompt suggestions field
+  promptSuggestions?: string | null;
   createdAt: string;
   updatedAt: string;
   published: boolean;
   lightningAddress?: string | null;
+  nwcUrl?: string | null; // Add nwcUrl field
+  // Backend related fields (only present if editKey matches)
+  denoCode?: string | null;
+  backendState?: BackendState | null;
+  backendPort?: number | null;
+  generatingSection?: string | null; // Add generating section
+  systemPrompt?: string;
+  systemPromptSegmentNames?: SystemPromptSegmentName[];
+  seed?: number;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
 
-/*
-frontend/src/pages/AppStatusPage.tsx
-
-After the prompt text area I want a "Regenerate" button which will set the status back to generating and re-generate with the current prompt. (can only be called while unpublished). Also change the text area to be editable if it's unpublished.
-
-Make the necessary backend changes too.
-*/
 function AppStatusPage() {
   const { id } = useParams<{ id: string }>();
   const [appData, setAppData] = useState<AppData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // General loading for initial fetch/polling
+  const [isBackendLoading, setIsBackendLoading] = useState(false); // Specific loading for backend actions
   const [error, setError] = useState<string | null>(null);
-  const [promptText, setPromptText] = useState(""); // State for editable prompt
+  const [promptText, setPromptText] = useState("");
   const [lightningAddress, setLightningAddress] = useState("");
+  const [nwcUrl, setNwcUrl] = useState(""); // Add state for NWC URL
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
-  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false); // State for suggestions modal
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref to store interval ID
-  const [showEditTitleModal, setShowEditTitleModal] = useState(false); // State for edit title modal
-  const [appTitle, setAppTitle] = useState(""); // State for the title being edited
+  const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
+  const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  // Ref to hold the latest appData for use in interval callbacks
+  const appDataRef = useRef(appData);
+  useEffect(() => {
+    appDataRef.current = appData;
+  }, [appData]);
+  const [showEditTitleModal, setShowEditTitleModal] = useState(false);
+  const [appTitle, setAppTitle] = useState("");
+  const [showHtmlModal, setShowHtmlModal] = useState(false);
+  const [showBackendModal, setShowBackendModal] = useState(false);
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
@@ -136,6 +158,47 @@ function AppStatusPage() {
       console.error("Error setting Lightning Address:", error);
       alert(
         `Error setting Lightning Address: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
+  const saveNwcUrl = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot set NWC URL: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+    // Basic validation (optional: add more robust validation)
+    if (!nwcUrl || !nwcUrl.startsWith("nostr+walletconnect://")) {
+      alert("Please enter a valid NWC URL (e.g., nostr+walletconnect://...).");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nwcUrl }), // Send nwcUrl
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to set NWC URL: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      toast(`NWC URL updated successfully.`);
+    } catch (error) {
+      console.error("Error setting NWC URL:", error);
+      alert(
+        `Error setting NWC URL: ${
           error instanceof Error ? error.message : "An unknown error occurred."
         }`
       );
@@ -237,10 +300,16 @@ function AppStatusPage() {
         if (!lightningAddress) {
           setLightningAddress(data.lightningAddress || ""); // Initialize input with fetched data
         }
+        if (!nwcUrl) {
+          setNwcUrl(data.nwcUrl || ""); // Initialize NWC URL input
+        }
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
-        if (data.state === "COMPLETED" || data.state === "FAILED") {
+        if (
+          (data.state === "COMPLETED" && data.backendState !== "STARTING") ||
+          data.state === "FAILED"
+        ) {
           if (intervalRef.current) {
             console.log(`Polling stopped for App ${id}, state: ${data.state}`);
             clearInterval(intervalRef.current);
@@ -262,7 +331,15 @@ function AppStatusPage() {
         setIsLoading(false);
       }
     },
-    [appData?.state, editKey, id, isLoading, lightningAddress, promptText] // Added promptText dependency
+    [
+      appData?.state,
+      editKey,
+      id,
+      isLoading,
+      lightningAddress,
+      nwcUrl,
+      promptText,
+    ] // Add nwcUrl dependency
   );
 
   const saveAppTitle = async () => {
@@ -308,10 +385,129 @@ function AppStatusPage() {
     }
   };
 
+  // --- Backend Control Handlers ---
+  const handleBackendAction = async (action: "start" | "stop") => {
+    if (!id || !editKey || !appData?.denoCode) {
+      toast.error("Cannot perform backend action: Missing ID, key, or code.");
+      return;
+    }
+
+    setIsBackendLoading(true);
+    try {
+      const response = await fetch(
+        `/api/apps/${id}/backend/${action}?editKey=${editKey}`,
+        {
+          method: "POST",
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: response.statusText }));
+        throw new Error(
+          `Failed to ${action} backend: ${response.status} - ${errorData.message}`
+        );
+      }
+
+      const result = await response.json();
+      toast.success(`Backend ${action} request sent successfully.`);
+
+      // Update local state immediately based on expected result or refetch
+      setAppData((prev) =>
+        prev
+          ? {
+              ...prev,
+              backendState:
+                result.backendState ||
+                (action === "start" ? "STARTING" : "STOPPING"), // Optimistic update
+              backendPort: action === "stop" ? null : prev.backendPort, // Clear port on stop
+            }
+          : null
+      );
+      // Optionally trigger a fetchStatus() after a short delay to confirm
+      setTimeout(() => fetchStatus(), 1000);
+    } catch (error) {
+      console.error(`Error ${action}ing backend:`, error);
+      toast.error(
+        `Error ${action}ing backend: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    } finally {
+      setIsBackendLoading(false);
+    }
+  };
+
+  const handleStartBackend = () => handleBackendAction("start");
+  const handleStopBackend = () => handleBackendAction("stop");
+  // --- End Backend Control Handlers ---
+
+  const cancelGeneration = async () => {
+    if (!id || !editKey || appData?.state !== "GENERATING") {
+      console.error(
+        "Cannot cancel: Missing ID/key or not in GENERATING state."
+      );
+      toast.error("Cancellation is only possible during generation.");
+      return;
+    }
+
+    setIsLoading(true); // Indicate loading state
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          state: "FAILED",
+          errorMessage: "Cancelled by user",
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to cancel generation: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      // Optimistically update state and stop polling
+      setAppData((prev) =>
+        prev
+          ? {
+              ...prev,
+              state: "FAILED",
+              errorMessage: "Cancelled by user",
+            }
+          : null
+      );
+      setError(null); // Clear previous errors
+      toast.info(`App ${id} generation cancelled.`);
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current); // Stop polling immediately
+        intervalRef.current = null;
+      }
+    } catch (error) {
+      console.error("Error cancelling generation:", error);
+      toast.error(
+        `Error cancelling generation: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    } finally {
+      setIsLoading(false); // Stop loading indicator
+    }
+  };
+
   const shouldPoll =
     appData?.state === "GENERATING" ||
     appData?.state === "INITIALIZING" ||
-    appData?.state === "REVIEWING"; // Continue polling during REVIEWING
+    appData?.state === "REVIEWING" ||
+    appData?.backendState === "STARTING" || // Poll while backend is starting/stopping
+    appData?.backendState === "STOPPING";
   useEffect(() => {
     if (!id) {
       setError("No App ID provided.");
@@ -342,7 +538,7 @@ function AppStatusPage() {
         clearInterval(intervalRef.current);
       }
     };
-  }, [fetchStatus, id, shouldPoll]); // Rerun effect if ID changes
+  }, [fetchStatus, id, shouldPoll]); // Rerun effect if backend state changes too
 
   // --- Render Logic ---
 
@@ -365,8 +561,7 @@ function AppStatusPage() {
   let statusMessage: string; // Explicitly type as string
   let statusColor = "text-gray-600";
 
-  const buttonDisabled =
-    appData.state !== "COMPLETED" || (!appData.published && !previewKey);
+  const buttonDisabled = false; //appData.state !== "COMPLETED" || (!appData.published && !previewKey);
 
   // Set display strings/styles based on the actual state
   switch (appData.state) {
@@ -375,7 +570,9 @@ function AppStatusPage() {
       statusColor = "text-yellow-600";
       break;
     case "GENERATING":
-      statusMessage = "Generating...";
+      statusMessage = `Generating${
+        appData.generatingSection ? `: ${appData.generatingSection}` : "..."
+      }`;
       statusColor = "text-blue-600 animate-pulse"; // Add pulse animation
       break;
     case "REVIEWING": // Add case for REVIEWING state
@@ -454,8 +651,10 @@ function AppStatusPage() {
                     </Button>
                   </div>
                 </div>
-                {/* Action Buttons: Regenerate & Suggestions */}
-                <div className="flex gap-2 mt-2">
+                {/* Action Buttons: Regenerate, Suggestions, System Prompt, HTML, Backend */}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {" "}
+                  {/* Use flex-wrap for better responsiveness */}
                   {!appData.published &&
                     editKey &&
                     (appData.state === "COMPLETED" ||
@@ -481,8 +680,59 @@ function AppStatusPage() {
                         ✨ Suggestions
                       </Button>
                     )}
+                  {editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "REVIEWING") &&
+                    !!appData.html && (
+                      <Button
+                        onClick={() => setShowHtmlModal(true)} // Update onClick
+                        variant="outline"
+                        size="sm"
+                      >
+                        💻 View HTML
+                      </Button>
+                    )}
+                  {editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "REVIEWING") &&
+                    !!appData.denoCode && (
+                      <Button
+                        onClick={() => setShowBackendModal(true)} // Update onClick
+                        variant="outline"
+                        size="sm"
+                      >
+                        🗄️ View Backend
+                      </Button>
+                    )}
+                  {/* View System Prompt Button */}
+                  {editKey && appData.systemPrompt && (
+                    <Button
+                      onClick={() => setShowSystemPromptModal(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      📄 View System Prompt
+                    </Button>
+                  )}
                 </div>
-                <p>
+                {/* System Knowledge Badges */}
+                {editKey && appData.systemPromptSegmentNames && (
+                  <div className="mt-3">
+                    <h4 className="text-sm font-medium mb-1">
+                      System Knowledge
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {appData.systemPromptSegmentNames.map((name) => (
+                        <Badge key={name} variant="secondary">
+                          {name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2">
+                  {" "}
+                  {/* Add margin top to separate from badges */}
                   Status:{" "}
                   <span className={`font-semibold ${statusColor}`}>
                     {statusMessage}
@@ -490,13 +740,25 @@ function AppStatusPage() {
                       <span className="text-sm">: {appData.errorMessage}</span>
                     )}
                   </span>
+                  {/* Cancel Button */}
+                  {appData.state === "GENERATING" && editKey && (
+                    <Button
+                      onClick={cancelGeneration}
+                      disabled={isLoading}
+                      variant="destructive"
+                      size="sm"
+                      className="ml-2"
+                    >
+                      Cancel
+                    </Button>
+                  )}
                 </p>
                 {!!appData.numChars && (
                   <p>
                     Characters Generated: {appData.numChars.toLocaleString()}
                   </p>
                 )}
-                {/* Progress component removed */}
+                <p>Seed: {appData.seed || "undefined"}</p>
                 <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
                 <p>
                   Last Update: {new Date(appData.updatedAt).toLocaleString()}
@@ -513,31 +775,116 @@ function AppStatusPage() {
                 </p>
               </div>
 
-              {/* Lightning Address Input */}
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center">
-                  <Label htmlFor="lightning-address">Lightning Address</Label>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => setShowLearnMoreModal(true)}
-                  >
-                    <InfoIcon className="w-4 h-4" />
-                  </Button>
-                </div>
+              {/* --- Backend Status Section --- */}
+              {editKey &&
+                appData.denoCode && ( // Only show if editKey matches and denoCode exists
+                  <div className="mt-4 pt-4 border-t">
+                    <h4 className="font-semibold mb-2 text-md">
+                      Backend Status
+                    </h4>
+                    <p>
+                      State:{" "}
+                      <span className="font-medium">
+                        {appData.backendState || "Unknown"}
+                      </span>
+                      {appData.backendState === "RUNNING" &&
+                        appData.backendPort && (
+                          <span> (Port: {appData.backendPort})</span>
+                        )}
+                    </p>
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        onClick={handleStartBackend}
+                        disabled={
+                          isBackendLoading ||
+                          appData.backendState === "RUNNING" ||
+                          appData.backendState === "STARTING" ||
+                          appData.backendState === "STOPPING"
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        {isBackendLoading &&
+                        (appData.backendState === "STARTING" ||
+                          !appData.backendState)
+                          ? "Starting..."
+                          : "Start Backend"}
+                      </Button>
+                      <Button
+                        onClick={handleStopBackend}
+                        disabled={
+                          isBackendLoading ||
+                          appData.backendState === "STOPPED" ||
+                          appData.backendState === "STOPPING" ||
+                          appData.backendState === "FAILED_TO_START"
+                        }
+                        size="sm"
+                        variant="destructive"
+                      >
+                        {isBackendLoading && appData.backendState === "STOPPING"
+                          ? "Stopping..."
+                          : "Stop Backend"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              {/* --- End Backend Status Section --- */}
 
-                <div className="flex gap-2">
-                  <Input
-                    id="lightning-address"
-                    placeholder="yourname@getalby.com"
-                    value={lightningAddress}
-                    onChange={(e) => setLightningAddress(e.target.value)}
-                  />
-                  <Button onClick={saveLightningAddress}>Set</Button>
-                </div>
-              </div>
+              {/* Lightning Address Input - Wrapped with conditional logic */}
+              {editKey &&
+                (appData.systemPromptSegmentNames?.includes(
+                  "lightning tools"
+                ) ||
+                  (!appData.systemPromptSegmentNames?.length &&
+                    appData.state === "COMPLETED")) && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center">
+                      <Label htmlFor="lightning-address">
+                        Lightning Address
+                      </Label>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setShowLearnMoreModal(true)}
+                      >
+                        <InfoIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        id="lightning-address"
+                        placeholder="yourname@getalby.com"
+                        value={lightningAddress}
+                        onChange={(e) => setLightningAddress(e.target.value)}
+                      />
+                      <Button onClick={saveLightningAddress}>Set</Button>
+                    </div>
+                  </div>
+                )}
+              {/* End Lightning Address Input */}
 
-              {appData.state === "COMPLETED" && (
+              {/* NWC URL Input - Added */}
+              {editKey && appData.systemPromptSegmentNames?.includes("NWC") && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center">
+                    <Label htmlFor="nwc-url">NWC URL</Label>
+                    {/* You could add an InfoIcon/Modal here too if desired */}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="nwc-url"
+                      placeholder="nostr+walletconnect://..."
+                      value={nwcUrl}
+                      onChange={(e) => setNwcUrl(e.target.value)}
+                    />
+                    <Button onClick={saveNwcUrl}>Set</Button>
+                  </div>
+                </div>
+              )}
+              {/* End NWC URL Input */}
+
+              {(appData.state === "COMPLETED" ||
+                appData.state === "REVIEWING") && (
                 <a
                   href={
                     buttonDisabled
@@ -546,6 +893,7 @@ function AppStatusPage() {
                           appData.published ? "" : `?previewKey=${previewKey}`
                         }`
                   }
+                  target="_blank"
                 >
                   <Button
                     disabled={buttonDisabled}
@@ -669,6 +1017,90 @@ function AppStatusPage() {
               </Button>
               <Button onClick={saveAppTitle}>Save</Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* View HTML Modal */}
+      {showHtmlModal && appData?.html && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View HTML</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.html || "")}
+                title="Copy HTML"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.html}
+            </pre>
+            <Button
+              onClick={() => setShowHtmlModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* View Backend Code Modal */}
+      {showBackendModal && appData?.denoCode && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View Backend Code</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.denoCode || "")}
+                title="Copy Backend Code"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.denoCode}
+            </pre>
+            <Button
+              onClick={() => setShowBackendModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* View System Prompt Modal */}
+      {showSystemPromptModal && appData?.systemPrompt && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View System Prompt</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.systemPrompt || "")}
+                title="Copy System Prompt"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.systemPrompt}
+            </pre>
+            <Button
+              onClick={() => setShowSystemPromptModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
           </div>
         </div>
       )}
