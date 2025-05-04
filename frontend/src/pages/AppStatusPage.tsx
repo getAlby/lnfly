@@ -10,6 +10,7 @@ import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { SystemPromptSegmentName } from "../../../backend/src/ai/systemPrompt";
 
 // Define the expected structure of the app data from the API
 // Define possible backend states from Prisma enum
@@ -33,13 +34,15 @@ interface AppData {
   updatedAt: string;
   published: boolean;
   lightningAddress?: string | null;
+  nwcUrl?: string | null; // Add nwcUrl field
   // Backend related fields (only present if editKey matches)
   denoCode?: string | null;
   backendState?: BackendState | null;
   backendPort?: number | null;
   generatingSection?: string | null; // Add generating section
   systemPrompt?: string;
-  systemPromptSegmentNames?: string;
+  systemPromptSegmentNames?: SystemPromptSegmentName[];
+  seed?: number;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
@@ -52,6 +55,7 @@ function AppStatusPage() {
   const [error, setError] = useState<string | null>(null);
   const [promptText, setPromptText] = useState("");
   const [lightningAddress, setLightningAddress] = useState("");
+  const [nwcUrl, setNwcUrl] = useState(""); // Add state for NWC URL
   const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
@@ -160,6 +164,47 @@ function AppStatusPage() {
     }
   };
 
+  const saveNwcUrl = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot set NWC URL: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+    // Basic validation (optional: add more robust validation)
+    if (!nwcUrl || !nwcUrl.startsWith("nostr+walletconnect://")) {
+      alert("Please enter a valid NWC URL (e.g., nostr+walletconnect://...).");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nwcUrl }), // Send nwcUrl
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to set NWC URL: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      toast(`NWC URL updated successfully.`);
+    } catch (error) {
+      console.error("Error setting NWC URL:", error);
+      alert(
+        `Error setting NWC URL: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
   const regenerateApp = async () => {
     if (!id || !editKey || !appData || appData.published) {
       console.error(
@@ -255,6 +300,9 @@ function AppStatusPage() {
         if (!lightningAddress) {
           setLightningAddress(data.lightningAddress || ""); // Initialize input with fetched data
         }
+        if (!nwcUrl) {
+          setNwcUrl(data.nwcUrl || ""); // Initialize NWC URL input
+        }
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
@@ -283,7 +331,15 @@ function AppStatusPage() {
         setIsLoading(false);
       }
     },
-    [appData?.state, editKey, id, isLoading, lightningAddress, promptText]
+    [
+      appData?.state,
+      editKey,
+      id,
+      isLoading,
+      lightningAddress,
+      nwcUrl,
+      promptText,
+    ] // Add nwcUrl dependency
   );
 
   const saveAppTitle = async () => {
@@ -505,8 +561,7 @@ function AppStatusPage() {
   let statusMessage: string; // Explicitly type as string
   let statusColor = "text-gray-600";
 
-  const buttonDisabled =
-    appData.state !== "COMPLETED" || (!appData.published && !previewKey);
+  const buttonDisabled = false; //appData.state !== "COMPLETED" || (!appData.published && !previewKey);
 
   // Set display strings/styles based on the actual state
   switch (appData.state) {
@@ -667,15 +722,11 @@ function AppStatusPage() {
                       System Knowledge
                     </h4>
                     <div className="flex flex-wrap gap-1">
-                      {appData.systemPromptSegmentNames
-                        .split(",")
-                        .map((name) => name.trim())
-                        .filter(Boolean) // Remove empty strings if any
-                        .map((name) => (
-                          <Badge key={name} variant="secondary">
-                            {name}
-                          </Badge>
-                        ))}
+                      {appData.systemPromptSegmentNames.map((name) => (
+                        <Badge key={name} variant="secondary">
+                          {name}
+                        </Badge>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -707,7 +758,7 @@ function AppStatusPage() {
                     Characters Generated: {appData.numChars.toLocaleString()}
                   </p>
                 )}
-                {/* Progress component removed */}
+                <p>Seed: {appData.seed || "undefined"}</p>
                 <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
                 <p>
                   Last Update: {new Date(appData.updatedAt).toLocaleString()}
@@ -779,29 +830,58 @@ function AppStatusPage() {
                 )}
               {/* --- End Backend Status Section --- */}
 
-              {/* Lightning Address Input */}
-              <div className="mt-4 space-y-2">
-                <div className="flex items-center">
-                  <Label htmlFor="lightning-address">Lightning Address</Label>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={() => setShowLearnMoreModal(true)}
-                  >
-                    <InfoIcon className="w-4 h-4" />
-                  </Button>
-                </div>
+              {/* Lightning Address Input - Wrapped with conditional logic */}
+              {editKey &&
+                (appData.systemPromptSegmentNames?.includes(
+                  "lightning tools"
+                ) ||
+                  (!appData.systemPromptSegmentNames?.length &&
+                    appData.state === "COMPLETED")) && (
+                  <div className="mt-4 space-y-2">
+                    <div className="flex items-center">
+                      <Label htmlFor="lightning-address">
+                        Lightning Address
+                      </Label>
+                      <Button
+                        variant="link"
+                        size="sm"
+                        onClick={() => setShowLearnMoreModal(true)}
+                      >
+                        <InfoIcon className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        id="lightning-address"
+                        placeholder="yourname@getalby.com"
+                        value={lightningAddress}
+                        onChange={(e) => setLightningAddress(e.target.value)}
+                      />
+                      <Button onClick={saveLightningAddress}>Set</Button>
+                    </div>
+                  </div>
+                )}
+              {/* End Lightning Address Input */}
 
-                <div className="flex gap-2">
-                  <Input
-                    id="lightning-address"
-                    placeholder="yourname@getalby.com"
-                    value={lightningAddress}
-                    onChange={(e) => setLightningAddress(e.target.value)}
-                  />
-                  <Button onClick={saveLightningAddress}>Set</Button>
+              {/* NWC URL Input - Added */}
+              {editKey && appData.systemPromptSegmentNames?.includes("NWC") && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center">
+                    <Label htmlFor="nwc-url">NWC URL</Label>
+                    {/* You could add an InfoIcon/Modal here too if desired */}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="nwc-url"
+                      placeholder="nostr+walletconnect://..."
+                      value={nwcUrl}
+                      onChange={(e) => setNwcUrl(e.target.value)}
+                    />
+                    <Button onClick={saveNwcUrl}>Set</Button>
+                  </div>
                 </div>
-              </div>
+              )}
+              {/* End NWC URL Input */}
 
               {(appData.state === "COMPLETED" ||
                 appData.state === "REVIEWING") &&

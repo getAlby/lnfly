@@ -23,6 +23,7 @@ model App {
   updatedAt DateTime @updatedAt
   published Boolean @default(false)
   lightningAddress String?
+  nwcUrl           String?
   editKey String @default(uuid())
   previewKey String @default(uuid())
   errorMessage String? // Add field to store error messages
@@ -30,6 +31,7 @@ model App {
   generatingSection String?
   systemPrompt String?
   systemPromptSegmentNames String?
+  seed Int?
 }
 
 enum AppState {

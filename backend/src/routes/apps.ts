@@ -176,6 +176,7 @@ async function appRoutes(
                 backendPort: app.backendPort,
                 generatingSection: app.generatingSection,
                 systemPrompt: app.systemPrompt,
+                nwcUrl: app.nwcUrl,
               }
             : {}),
           ...(app.published || request.query.editKey === app.editKey
@@ -186,7 +187,10 @@ async function appRoutes(
                 prompt: app.prompt,
                 numChars: app.numChars,
                 title: app.title,
-                systemPromptSegmentNames: app.systemPromptSegmentNames,
+                seed: app.seed,
+                systemPromptSegmentNames: app.systemPromptSegmentNames
+                  ?.split(",")
+                  .map((name) => name.trim()),
                 // Do NOT expose denoCode/backend details here unless editKey matches (handled above)
               }
             : {}),
@@ -204,6 +208,7 @@ async function appRoutes(
   interface UpdateAppBody {
     published?: boolean;
     lightningAddress?: string;
+    nwcUrl?: string; // Add nwcUrl field
     title?: string;
     state?: AppState; // Add state field
     errorMessage?: string | null; // Add errorMessage field
@@ -217,8 +222,8 @@ async function appRoutes(
   }>("/:id", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { published, lightningAddress, title, state, errorMessage } =
-      request.body; // Extract new fields
+    const { published, lightningAddress, nwcUrl, title, state, errorMessage } =
+      request.body; // Extract nwcUrl // Extract new fields
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -232,7 +237,8 @@ async function appRoutes(
     // Ensure at least one updatable field is provided
     if (
       published === undefined &&
-      lightningAddress === undefined && // Check if undefined
+      lightningAddress === undefined &&
+      nwcUrl === undefined && // Check nwcUrl
       title === undefined &&
       state === undefined &&
       errorMessage === undefined
@@ -265,6 +271,7 @@ async function appRoutes(
           // Pass all potentially undefined fields directly
           published,
           lightningAddress,
+          nwcUrl, // Add nwcUrl to update data
           title,
           state,
           errorMessage,
@@ -273,6 +280,7 @@ async function appRoutes(
           id: true,
           published: true,
           lightningAddress: true,
+          nwcUrl: true, // Select updated nwcUrl
           title: true,
           state: true, // Select updated state
           errorMessage: true, // Select updated error message
@@ -353,6 +361,8 @@ async function appRoutes(
           denoCode: null, // Clear deno code on regenerate
           backendState: BackendState.STOPPED, // Reset backend state
           backendPort: null,
+          systemPrompt: null,
+          systemPromptSegmentNames: null,
         },
       });
 
@@ -618,18 +628,22 @@ async function executePromptAndUpdateDb(
   let generatedCharsCount = 0;
   let lastUpdateTime = 0; // Track last DB update time for throttling
   const throttleInterval = 1000; // Update DB at most every 1 second
+  const seed = Math.floor(Math.random() * 21_000_000);
 
   try {
     // based on the prompt we give it specific knowledge
-    const { systemPrompt, segmentNames } = await generateSystemPrompt(prompt);
+    const { systemPrompt, segmentNames } = await generateSystemPrompt(
+      prompt,
+      seed
+    );
 
     await prisma.app.update({
       where: { id: appId },
-      data: { systemPrompt, systemPromptSegmentNames: segmentNames.join(", ") },
+      data: { systemPrompt, systemPromptSegmentNames: segmentNames.join(",") },
     });
 
     // Get the stream from the updated executePrompt
-    const outputStream = executePrompt(prompt, systemPrompt);
+    const outputStream = executePrompt(prompt, systemPrompt, seed);
 
     let currentLine = "";
     // Process the stream chunk by chunk
@@ -638,7 +652,7 @@ async function executePromptAndUpdateDb(
         // Mark as GENERATING once we get first chunk back
         await prisma.app.update({
           where: { id: appId },
-          data: { state: AppState.GENERATING },
+          data: { state: AppState.GENERATING, seed },
         });
         fastify.log.info(`App ${appId} state changed to GENERATING.`);
       }
@@ -734,8 +748,8 @@ async function executePromptAndUpdateDb(
     // Generate title and evaluate prompt after successful HTML generation
     fastify.log.info(`App ${appId} generating title and evaluating prompt...`);
     const [generatedTitle, promptEvaluation] = await Promise.all([
-      generateAppTitle(generatedHtml),
-      evaluatePrompt(prompt, systemPrompt),
+      generateAppTitle(generatedHtml, seed),
+      evaluatePrompt(prompt, systemPrompt, seed),
     ]);
     fastify.log.info(
       `App ${appId} title: ${generatedTitle}, evaluation score: ${

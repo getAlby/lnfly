@@ -4,6 +4,14 @@ Lightning Fly - A platform to quickly create apps that you can earn through bitc
 
 [Try it now](https://lnfly.fly.dev/)
 
+## Supported Lightning functionality
+
+LNFly has limited knowledge of some lightning tools to enable your generated app to interact with lightning wallets:
+
+- Bitcoin connect (Payment modal, WebLN)
+- Lightning tools (Request invoice from lightning address, verify invoice)
+- NWC (Make invoice, lookup invoice, pay invoice)
+
 ## How it works
 
 LNFly focuses on simplicity - 1 html file for frontend, and if needed, 1 deno file for the backend.
@@ -29,6 +37,7 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] [Bitcoin Connect] Request WebLN provider
 - [x] [NWC] Create, lookup and pay invoices
 - [x] Generate system prompt based on request
+- [x] Allow configuring NWC connection
 - [ ] Update dockerfile to add fly
 - [ ] Stop app backends automatically after 10 minutes
 - [ ] Allow specifying a seed for generation

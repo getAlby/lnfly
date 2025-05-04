@@ -4,6 +4,7 @@ import { generateText, LanguageModelV1, streamText } from "ai";
 import {
   buildSystemPrompt,
   optionalSystemPromptSegments,
+  SystemPromptSegmentName,
 } from "./systemPrompt";
 
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -20,17 +21,15 @@ if (geminiApiKey) {
   if (!openRouterApiKey) {
     throw new Error("No API key provided");
   }
-  //const modelName = "deepseek/deepseek-chat-v3-0324:free";
-  const modelName = "deepseek/deepseek-chat:free";
+  const modelName = "deepseek/deepseek-chat-v3-0324:free";
+  //const modelName = "deepseek/deepseek-chat:free";
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
   });
   chatModel = openrouter.chat(modelName);
 }
 
-const seed = 212121;
-
-export const generateSystemPrompt = async (prompt: string) => {
+export const generateSystemPrompt = async (prompt: string, seed: number) => {
   const segmentPrompts: string[] = [];
   let segmentNames: string[] = [];
   try {
@@ -55,7 +54,7 @@ export const generateSystemPrompt = async (prompt: string) => {
     let arrayEnd = text.lastIndexOf("]");
     const extractedText = text.slice(arrayStart, arrayEnd + 1);
 
-    segmentNames = JSON.parse(extractedText) as string[];
+    segmentNames = JSON.parse(extractedText) as SystemPromptSegmentName[];
     if (!Array.isArray(segmentNames)) {
       throw new Error("segment names is not an array");
     }
@@ -87,7 +86,8 @@ export const generateSystemPrompt = async (prompt: string) => {
 // Updated function signature to return AsyncIterable<string>
 export const executePrompt = (
   prompt: string,
-  systemPrompt: string
+  systemPrompt: string,
+  seed: number
 ): AsyncIterable<string> => {
   console.log("Streaming from OpenRouter for prompt:", prompt);
 
@@ -119,7 +119,10 @@ export const executePrompt = (
 };
 
 // Function to generate a short title for the app based on the prompt
-export const generateAppTitle = async (html: string): Promise<string> => {
+export const generateAppTitle = async (
+  html: string,
+  seed: number
+): Promise<string> => {
   try {
     const { text } = await generateText({
       model: chatModel,
@@ -140,7 +143,8 @@ export const generateAppTitle = async (html: string): Promise<string> => {
 // Function to evaluate the clarity of the prompt and provide suggestions
 export const evaluatePrompt = async (
   prompt: string,
-  systemPrompt: string
+  systemPrompt: string,
+  seed: number
 ): Promise<string> => {
   // Combine the user prompt with the system prompt used for generation for context
   const fullPromptContext = `
@@ -164,7 +168,7 @@ ${prompt}
       1. Read the entire prompt context carefully (system instructions + user prompt).
       2. Evaluate how clear and unambiguous the user's prompt is for the web development AI, considering the system instructions and constraints. DO NOT evaluate the system prompt!
       3. Assign a clarity score from 1 (very unclear, ambiguous, likely to fail) to 10 (perfectly clear, specific, unambiguous).
-      4. Identify the main areas where the user's prompt could be improved for better results. List these as bullet points, ordered by importance (most critical improvement first). Focus on aspects that might lead to misinterpretation or incomplete generation by the web development AI, (such as: when and where payments should be made and what should happen after a payment is successfully made).
+      4. Identify the main areas where the user's prompt could be improved for better results. List these as bullet points, ordered by importance (most critical improvement first). Focus on aspects that might lead to misinterpretation or incomplete generation by the web development AI.
       5. Format your output EXACTLY as follows:
          Score: [Your Score]/10
 
@@ -175,6 +179,7 @@ ${prompt}
 
       Only output the score and suggestions in this format. Do not include any other explanations or introductory text.`,
       prompt: `Evaluate the following prompt context:\n\n${fullPromptContext}`,
+      seed,
     });
     console.log("Generated prompt evaluation:", text);
     return text.trim();

@@ -138,7 +138,8 @@ export class DenoManager {
           env: {
             ...process.env,
             PORT: port.toString(),
-            NWC_URL: process.env.DEFAULT_NWC_URL,
+            // Use app-specific NWC URL if available, otherwise fallback to default
+            NWC_URL: app.nwcUrl || process.env.DEFAULT_NWC_URL,
           },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr
         }

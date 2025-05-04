@@ -1,5 +1,11 @@
+export type SystemPromptSegmentName =
+  | "bitcoin connect (payment modal)"
+  | "bitcoin connect (WebLN)"
+  | "lightning tools"
+  | "NWC";
+
 type SystemPromptSegment = {
-  name: string;
+  name: SystemPromptSegmentName;
   usecase: string;
   prompt: string;
   environment: "frontend" | "backend" | "any";
@@ -72,9 +78,9 @@ You know how to use bitcoin connect on the frontend to connect to a wallet:
   // TODO: add lightning tools tool for decoding invoice
   {
     name: "lightning tools",
-    environment: "any",
+    environment: "frontend",
     usecase:
-      "fetch a lightning invoice from a lightning address. Only use if you only have the recipient lightning address. If you have a NWC connection to generate the invoice, use that instead",
+      "fetch a lightning invoice from a lightning address. Enabling this segment will allow the app developer to specify a lightning address to receive payments made by the user interacting with the app and can be used directly from the frontend. If you have a NWC connection to generate the invoice, use that instead",
     prompt: `
 You know how to use lightning tools to generate a lightning invoice for a lightning address and check if it was paid:
 
@@ -139,7 +145,7 @@ ${segmentPrompts.join("\n\n")}
 Here are the rules you MUST follow:
 
 **General:**
-- Analyze the user's prompt carefully to determine if a backend is necessary. Simple UI-only apps should only have HTML.
+- Analyze the user's prompt carefully to determine if a backend is necessary. Simple UI-only apps should only have HTML. Unless payments need to be initiated from the backend, a backend most likely isn't needed.
 - Only output the code itself, without any explanations or surrounding text like "Here is the code:".
 - This is a one-shot prompt to create a REAL APP. Do not leave TODOs, or "demo code", or fake/random lightning invoices. You know how to create lightning invoices.
 
@@ -155,6 +161,7 @@ Here are the rules you MUST follow:
 **Deno Backend Generation (Optional):**
 - If a backend is required, generate a single Deno TypeScript file.
 - The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT --allow-env=NWC_URL <filename>\`.
+- The NWC URL is only be set if you have knowledge of NWC (if so it will have already been provided further up in this prompt)
 - The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
 - Use the standard Deno HTTP server (\`Deno.serve\`).
 - If payments are required, use the NWC code mentioned above.
