@@ -146,7 +146,7 @@ export class DenoManager {
 
       // 5. Spawn Deno Process
       const denoProcess = spawn(
-        "deno",
+        process.env.DENO_PATH || "deno",
         [
           "run",
           "--allow-net",
