@@ -126,8 +126,6 @@ const {invoice} = await client.makeInvoice({
 
 // lookup invoice: (the returned preimage will be set if the invoice has been paid)
 const {preimage} = await client.lookupInvoice({
-  // provide only one of the below
-  payment_hash,
   invoice,
 });
 
