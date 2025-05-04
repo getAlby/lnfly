@@ -144,15 +144,25 @@ export class DenoManager {
       await fs.writeFile(tempFilePath, processedDenoCode);
       console.log(`Deno code for app ${appId} written to ${tempFilePath}`);
 
-      // 5. Spawn Deno Process
+      // 5. Prepare Storage
+      const workDir = process.env.WORK_DIR || "."; // Use WORK_DIR or fallback to current dir
+      const storageDir = path.join(workDir, "apps", app.id.toString());
+      const storagePath = path.join(storageDir, "storage.json");
+
+      await fs.mkdir(storageDir, { recursive: true });
+      console.log(`Ensured storage directory exists: ${storageDir}`);
+
+      // 6. Spawn Deno Process
       const denoProcess = spawn(
         process.env.DENO_PATH || "deno",
         [
           "run",
-          "--allow-net",
-          "--allow-env=PORT,NWC_URL",
-          "--v8-flags=--max-heap-size=32,--max-old-space-size=32",
-          tempFilePath,
+          "--allow-net", // Network access (for fetch, NWC, etc.)
+          `--allow-env=PORT,NWC_URL,STORAGE_PATH`, // Environment variables
+          `--allow-read=${storagePath}`, // Read access ONLY to the storage file
+          `--allow-write=${storagePath}`, // Write access ONLY to the storage file
+          "--v8-flags=--max-heap-size=32,--max-old-space-size=32", // Resource limits
+          tempFilePath, // The temporary script file
         ],
         {
           env: {
@@ -160,6 +170,7 @@ export class DenoManager {
             PORT: port.toString(),
             // Use app-specific NWC URL if available, otherwise fallback to default
             NWC_URL: app.nwcUrl || process.env.DEFAULT_NWC_URL,
+            STORAGE_PATH: storagePath, // Pass the storage path to the Deno app
           },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr
         }

@@ -6,3 +6,6 @@ node_modules
 backend/lnfly_deno_apps
 # only used by generated apps
 backend/deno.lock
+
+# files for generated apps
+backend/apps

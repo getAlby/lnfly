@@ -13,6 +13,7 @@ swap_size_mb = 2048
   BASE_URL = 'https://lnfly.fly.dev'
   DATABASE_URL = 'file:/data/lnfly.db'
   DENO_PATH = '/root/.deno/bin/deno'
+  WORK_DIR = '/data`
 
 [[mounts]]
   source = 'lnfly_data'

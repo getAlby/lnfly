@@ -40,7 +40,7 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] Allow configuring NWC connection
 - [x] Stop app backends automatically after 10 minutes
 - [x] Update dockerfile to add fly
-- [ ] Basic data storage for backend apps
+- [x] Basic data storage for backend apps
 - [ ] Pay to upvote/downvote apps on homepage
 - [ ] User accounts
 - [ ] Nostr knowledge
