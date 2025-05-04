@@ -30,14 +30,24 @@ export const suggestions: Suggestion[] = [
     hasBackend: true,
     prompt: `make a simple app with title "Flip a coin" and two buttons (heads or tails). When the user presses one of the buttons:
 
-1. the user should be prompted to connect to their wallet
+1. the user should be prompted to connect to their wallet using bitcoin connect
 2. Request a 42 sat invoice from the user's wallet. This will be paid by the backend if the user guesses correctly.
-3. It does a call to the backend, providing the user's choice and their invoice, and the backend will generate and return a 21 sat invoice.
+3. Do a request to the backend, passing the user's choice and their invoice. The backend will use NWC to generate a 21 sat invoice and return it as the response.
+4. The user must pay the invoice using their connected wallet.
+5. Once the invoice is paid, begin polling a different endpoint on the backend once every 3 seconds. The invoice must be passed in the request. This endpoint will check if the invoice was paid, and if it was paid, flip the coin and return the result. If the user guessed correctly, the backend should also pay the user's invoice they provided.
+6. In the frontend, if a result is returned from the polling endpoint, check if it matches the user's choice. If so, show some confetti and "You guessed correctly! Enjoy the 42 sats!", otherwise show "you guessed incorrectly".`,
+  },
+  {
+    title: "Top Paid Link",
+    hasBackend: true,
+    prompt: `Make a page with a big button which will open a link in a new tab. The default link is "https://example.com" if no-one has paid for a link yet. Otherwise, it will use the latest paid link. The latest paid link should be hidden. The only way for the user to know the link is by clicking on the button.
 
-The user must pay the invoice using their connected wallet, and poll a different endpoint on the backend once every 3 seconds which will check if the invoice was paid, and if it was paid, flip the coin and return the result.
+Add a small "change link" button below. If the user clicks it, they should be prompted to type a link. Once they have entered a link, they should be shown a bitcoin connect payment modal to make a payment of 21 sats times the number of links already set (including the default link).
 
-If the user guessed correctly, the backend should also pay the user's invoice they provided.
+Add a small "view previous links" button below. This will show the links and the price paid. For the latest link, show ??? rather than the actual URL.
 
-If the result matches the user's choice, show some confetti and "You guessed correctly! Enjoy the 42 sats!", otherwise show "you guessed incorrectly".`,
+To generate the invoice that needs to be paid by the user, use NWC.
+
+The backend should store a list of submitted links.`,
   },
 ];
