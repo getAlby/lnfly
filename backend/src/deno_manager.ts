@@ -1,7 +1,6 @@
 import { App, BackendState, PrismaClient } from "@prisma/client";
 import { ChildProcess, spawn } from "child_process";
 import fs from "fs/promises";
-import os from "os";
 import path from "path";
 // We might need a port finding library later, e.g., 'get-port'
 // import getPort from 'get-port';
@@ -133,7 +132,7 @@ export class DenoManager {
       console.log(`Assigning port ${port} to app ${appId}.`);
 
       // 4. Write Deno code to temporary file
-      const tempDir = path.join(os.tmpdir(), "lnfly_deno_apps");
+      const tempDir = path.join(".", "lnfly_deno_apps");
       await fs.mkdir(tempDir, { recursive: true });
       const tempFilePath = path.join(tempDir, `app_${appId}_${Date.now()}.ts`);
 
