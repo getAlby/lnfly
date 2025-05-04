@@ -1,5 +1,6 @@
 # ---- Frontend Build Stage ----
-FROM node:22-alpine AS frontend-builder
+#FROM node:22-alpine AS frontend-builder
+FROM node:22 AS frontend-builder
 
 WORKDIR /app/frontend
 
@@ -14,7 +15,8 @@ COPY frontend/ ./
 RUN yarn build
 
 # ---- Backend Build Stage ----
-FROM node:22-alpine AS backend-builder
+#FROM node:22-alpine AS backend-builder
+FROM node:22 AS backend-builder
 
 WORKDIR /app/backend
 
@@ -34,7 +36,8 @@ RUN yarn build
 FROM node:22
 
 # Install Deno dependencies and Deno itself
-RUN apk add --no-cache curl unzip
+#RUN apk add --no-cache curl unzip
+RUN RUN apt-get update && apt-get install -y curl unzip
 RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y
 # Make deno globally available by linking it into a standard path directory
 #RUN ln -s /root/.deno/bin/deno /usr/local/bin/deno
