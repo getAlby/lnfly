@@ -38,8 +38,8 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] [NWC] Create, lookup and pay invoices
 - [x] Generate system prompt based on request
 - [x] Allow configuring NWC connection
+- [x] Stop app backends automatically after 10 minutes
 - [ ] Update dockerfile to add fly
-- [ ] Stop app backends automatically after 10 minutes
 - [ ] Allow specifying a seed for generation
 - [ ] Zap posts on homepage
 - [ ] User accounts

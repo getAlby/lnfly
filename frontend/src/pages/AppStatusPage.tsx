@@ -884,32 +884,28 @@ function AppStatusPage() {
               {/* End NWC URL Input */}
 
               {(appData.state === "COMPLETED" ||
-                appData.state === "REVIEWING") &&
-                (!appData.denoCode || appData.backendState === "RUNNING") && (
-                  <a
-                    href={
-                      buttonDisabled
-                        ? "#"
-                        : `/api/apps/${id}/view${
-                            appData.published ? "" : `?previewKey=${previewKey}`
-                          }`
-                    }
-                    target="_blank"
+                appData.state === "REVIEWING") && (
+                <a
+                  href={
+                    buttonDisabled
+                      ? "#"
+                      : `/api/apps/${id}/view${
+                          appData.published ? "" : `?previewKey=${previewKey}`
+                        }`
+                  }
+                  target="_blank"
+                >
+                  <Button
+                    disabled={buttonDisabled}
+                    className="mt-4 w-full" // Make button full width
+                    size="lg" // Make button larger
                   >
-                    <Button
-                      disabled={buttonDisabled}
-                      className="mt-4 w-full" // Make button full width
-                      size="lg" // Make button larger
-                    >
-                      {appData.published
-                        ? "View app"
-                        : "Preview unpublished app"}
-                    </Button>
-                  </a>
-                )}
+                    {appData.published ? "View app" : "Preview unpublished app"}
+                  </Button>
+                </a>
+              )}
               {!appData.published &&
                 appData.state === "COMPLETED" &&
-                (!appData.denoCode || appData.backendState === "RUNNING") &&
                 editKey && (
                   <Button
                     disabled={buttonDisabled}

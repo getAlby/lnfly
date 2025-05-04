@@ -25,6 +25,8 @@ async function appRoutes(
 ) {
   const { prisma, denoManager } = options; // Destructure prisma and denoManager
 
+  // --- Route Definitions ---
+
   // Define the expected body structure for creating an app
   interface CreateAppBody {
     prompt: string;
@@ -424,6 +426,10 @@ async function appRoutes(
             .send({ message: "App completed but no content found." });
         }
 
+        // Handle backend activity (reset timer or auto-start)
+        // We don't need to block the view based on the result here.
+        handleBackendActivity(appId, app, denoManager, fastify.log);
+
         // Send the HTML content
         let processedHtml = app.html; // Start with original HTML
         if (app.lightningAddress) {
@@ -552,24 +558,71 @@ async function appRoutes(
       }
 
       try {
-        // Fetch app details, specifically the port and state
+        // Fetch app details needed for proxying and activity check
         const app = await prisma.app.findUnique({
           where: { id: appId },
-          select: { backendPort: true, backendState: true },
+          select: {
+            backendPort: true,
+            backendState: true,
+            denoCode: true,
+          },
         });
 
         if (!app) {
           return reply.code(404).send({ message: "App not found." });
         }
 
-        // Check if the backend is running and has a port assigned
-        if (app.backendState !== BackendState.RUNNING || !app.backendPort) {
-          return reply.code(503).send({
-            message: "App backend is not running or port not available.",
-          });
+        // Handle backend activity and check readiness for proxying
+        const activityStatus = handleBackendActivity(
+          appId,
+          app,
+          denoManager,
+          fastify.log
+        );
+
+        switch (activityStatus) {
+          case "READY":
+            // Backend is running, proceed to proxy
+            if (!app.backendPort) {
+              // This case should theoretically not be reachable if status is READY
+              fastify.log.error(
+                `App ${appId} is RUNNING but has no backendPort assigned in proxy route!`
+              );
+              return reply
+                .code(500)
+                .send({ message: "Internal configuration error." });
+            }
+            break; // Continue to proxy logic below
+
+          case "STARTING":
+            // Backend was stopped, auto-start triggered
+            return reply.code(503).send({
+              message: "Backend starting, please retry shortly.",
+              code: "BACKEND_STARTING",
+            });
+
+          case "BUSY":
+            // Backend is STARTING or STOPPING
+            return reply.code(503).send({
+              message: `Backend is currently ${app.backendState}. Please wait.`,
+              code: `BACKEND_${app.backendState}`, // e.g., BACKEND_STARTING
+            });
+
+          case "NO_BACKEND":
+            // App has no backend code defined
+            return reply
+              .code(400)
+              .send({ message: "Proxy request for app with no backend code." });
+
+          default:
+            // Should not happen
+            fastify.log.error(
+              `Unhandled BackendActivityStatus: ${activityStatus}`
+            );
+            return reply.code(500).send({ message: "Internal Server Error." });
         }
 
-        // Construct the target URL for the Deno app
+        // If we reach here, activityStatus must be 'READY' and app.backendPort must exist
         const targetUrl = `http://localhost:${app.backendPort}/${targetPath}`;
 
         fastify.log.info(
@@ -810,3 +863,55 @@ async function executePromptAndUpdateDb(
 }
 
 export default appRoutes;
+
+// --- Helper Function for Backend Activity ---
+
+type BackendActivityStatus = "READY" | "STARTING" | "BUSY" | "NO_BACKEND";
+
+/**
+ * Checks backend status, resets inactivity timer if running,
+ * or attempts to auto-start if stopped.
+ * Returns a status indicating the backend's readiness for proxying.
+ */
+function handleBackendActivity(
+  appId: number,
+  app: { denoCode: string | null; backendState: BackendState | null },
+  denoManager: DenoManager,
+  logger: FastifyInstance["log"]
+): BackendActivityStatus {
+  if (!app.denoCode) {
+    return "NO_BACKEND";
+  }
+
+  switch (app.backendState) {
+    case BackendState.RUNNING:
+      denoManager.resetInactivityTimer(appId);
+      return "READY";
+
+    case BackendState.STOPPED:
+    case BackendState.FAILED_TO_START:
+      logger.info(
+        `Attempting to auto-start backend for app ${appId} due to activity.`
+      );
+      // Start backend (fire-and-forget)
+      denoManager.startAppBackend(appId).catch((err) => {
+        logger.error(
+          err,
+          `Error auto-starting backend for app ${appId} on activity`
+        );
+      });
+      return "STARTING"; // Indicate that start was triggered
+
+    case BackendState.STARTING:
+    case BackendState.STOPPING:
+      logger.info(`Backend for app ${appId} is busy (${app.backendState}).`);
+      return "BUSY";
+
+    default:
+      // Should not happen, but treat unknown/null state as busy
+      logger.warn(
+        `Unexpected backend state for app ${appId}: ${app.backendState}`
+      );
+      return "BUSY";
+  }
+}

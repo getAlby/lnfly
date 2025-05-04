@@ -10,7 +10,12 @@ interface RunningAppInfo {
   process: ChildProcess;
   port: number;
   tempFilePath: string;
+  lastActivityTime: number; // Timestamp of the last known activity
+  inactivityTimeoutId: NodeJS.Timeout | null; // Timer for automatic shutdown
 }
+
+// Constants
+const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 
 // Simple port management - find the next available port starting from a base
 // WARNING: This is basic and might have race conditions in high concurrency.
@@ -27,10 +32,19 @@ async function findAvailablePort(): Promise<number> {
 export class DenoManager {
   private runningApps: Map<number, RunningAppInfo> = new Map();
   private prisma: PrismaClient;
+  private readonly inactivityTimeoutMs: number;
 
-  constructor(prisma: PrismaClient) {
+  constructor(
+    prisma: PrismaClient,
+    inactivityTimeoutMs = INACTIVITY_TIMEOUT_MS
+  ) {
     this.prisma = prisma;
-    console.log("DenoManager initialized.");
+    this.inactivityTimeoutMs = inactivityTimeoutMs;
+    console.log(
+      `DenoManager initialized with inactivity timeout: ${
+        this.inactivityTimeoutMs / 1000 / 60
+      } minutes.`
+    );
   }
 
   async initializeManager(): Promise<void> {
@@ -150,6 +164,8 @@ export class DenoManager {
         process: denoProcess,
         port,
         tempFilePath,
+        lastActivityTime: Date.now(), // Initialize activity time
+        inactivityTimeoutId: null, // Initialize timeout ID
       };
       this.runningApps.set(appId, appInfo);
       console.log(
@@ -172,6 +188,8 @@ export class DenoManager {
               data: { backendState: BackendState.RUNNING, backendPort: port },
             });
             console.log(`App ${appId} state updated to RUNNING.`);
+            // Start the inactivity timer now that the app is confirmed running
+            this.scheduleInactivityCheck(appId);
           } catch (dbError) {
             console.error(
               `Failed to update app ${appId} state to RUNNING:`,
@@ -295,6 +313,13 @@ export class DenoManager {
       return;
     }
 
+    // Clear any pending inactivity timeout before stopping
+    if (appInfo.inactivityTimeoutId) {
+      clearTimeout(appInfo.inactivityTimeoutId);
+      appInfo.inactivityTimeoutId = null;
+      console.log(`Cleared inactivity timer for app ${appId} during stop.`);
+    }
+
     try {
       // 1. Update state to STOPPING
       // Avoid DB update if already stopped/failed
@@ -371,7 +396,16 @@ export class DenoManager {
     console.log(
       `Handling exit for app ${appId}. Exit code: ${exitCode}. Error: ${errorMessage}`
     );
-    const appInfo = this.runningApps.get(appId);
+    const appInfo = this.runningApps.get(appId); // Get info *before* deleting
+
+    // Clear inactivity timer if it exists (e.g., unexpected exit)
+    if (appInfo?.inactivityTimeoutId) {
+      clearTimeout(appInfo.inactivityTimeoutId);
+      // No need to set appInfo.inactivityTimeoutId = null, as appInfo is removed below
+      console.log(
+        `Cleared inactivity timer for app ${appId} during exit handling.`
+      );
+    }
 
     // Remove from tracking map
     this.runningApps.delete(appId);
@@ -474,6 +508,79 @@ export class DenoManager {
       console.log("Finished stopping all backends.");
     } catch (error) {
       console.error("Error during stopAllBackends:", error);
+    }
+  }
+
+  // --- Inactivity Timer Methods ---
+
+  /**
+   * Resets the inactivity timer for a given app.
+   * Should be called whenever there's activity related to the app (e.g., proxy request, view).
+   */
+  public resetInactivityTimer(appId: number): void {
+    const appInfo = this.runningApps.get(appId);
+    if (appInfo) {
+      appInfo.lastActivityTime = Date.now();
+      console.log(`Resetting inactivity timer for app ${appId}.`);
+      this.scheduleInactivityCheck(appId); // Reschedule the check
+    } else {
+      // This might happen if the app stopped between the check and the reset call, which is fine.
+      console.log(
+        `Attempted to reset inactivity timer for non-running app ${appId}.`
+      );
+    }
+  }
+
+  /**
+   * Schedules the next inactivity check for an app. Clears any existing timeout.
+   */
+  private scheduleInactivityCheck(appId: number): void {
+    const appInfo = this.runningApps.get(appId);
+    if (!appInfo) {
+      console.warn(
+        `Cannot schedule inactivity check for non-running app ${appId}.`
+      );
+      return;
+    }
+
+    // Clear existing timer if any
+    if (appInfo.inactivityTimeoutId) {
+      clearTimeout(appInfo.inactivityTimeoutId);
+    }
+
+    console.log(
+      `Scheduling inactivity check for app ${appId} in ${
+        this.inactivityTimeoutMs / 1000
+      } seconds.`
+    );
+
+    appInfo.inactivityTimeoutId = setTimeout(() => {
+      this.handleInactivityTimeout(appId);
+    }, this.inactivityTimeoutMs);
+
+    // Allow the Node.js process to exit even if this timer is pending
+    appInfo.inactivityTimeoutId.unref();
+  }
+
+  /**
+   * Handles the timeout event when an app becomes inactive.
+   */
+  private handleInactivityTimeout(appId: number): void {
+    console.log(
+      `Inactivity timeout reached for app ${appId}. Stopping backend...`
+    );
+    // Check if app is still running before stopping (might have been stopped manually)
+    if (this.runningApps.has(appId)) {
+      this.stopAppBackend(appId).catch((error) => {
+        console.error(
+          `Error stopping inactive app ${appId} from timeout handler:`,
+          error
+        );
+      });
+    } else {
+      console.log(
+        `App ${appId} was already stopped when inactivity timeout fired.`
+      );
     }
   }
 }
