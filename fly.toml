@@ -12,11 +12,15 @@ swap_size_mb = 2048
 [env]
   BASE_URL = 'https://lnfly.fly.dev'
   DATABASE_URL = 'file:/data/lnfly.db'
+  WORK_DIR = '/data'
 
 [[mounts]]
   source = 'lnfly_data'
   destination = '/data'
   initial_size = '1'
+  auto_extend_size_threshold = 80
+  auto_extend_size_increment = "1GB"
+  auto_extend_size_limit = "2GB"
 
 [http_service]
   internal_port = 3001

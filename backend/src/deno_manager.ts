@@ -132,7 +132,7 @@ export class DenoManager {
       console.log(`Assigning port ${port} to app ${appId}.`);
 
       // 4. Write Deno code to temporary file
-      const tempDir = path.join(".", "lnfly_deno_apps");
+      const tempDir = path.join(process.env.WORK_DIR || ".", "lnfly_deno_apps");
       await fs.mkdir(tempDir, { recursive: true });
       const tempFilePath = path.join(tempDir, `app_${appId}_${Date.now()}.ts`);
 
