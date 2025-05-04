@@ -16,7 +16,7 @@ export const optionalSystemPromptSegments: SystemPromptSegment[] = [
     name: "bitcoin connect (payment modal)",
     environment: "frontend",
     usecase:
-      "Pay an invoice and do something once the invoice was paid. If you need other wallet interaction from the user, this is not the right segment for you.",
+      "Pay an invoice and do something once the invoice was paid. If you need other wallet interaction from the user, this is not the right segment for you. IMPORTANT: this segment cannot be used on its own, it needs another segment for invoice generation.",
     prompt: `
 You know how to use bitcoin connect on the frontend to make payments:
 
@@ -201,3 +201,20 @@ console.log(\`Deno server running on port \${port}\`);
 
 - Ensure the delimiters \`<!-- HTML_START -->\`, \`<!-- HTML_END -->\`, \`// DENO_START\`, and \`// DENO_END\` are present and correctly placed on their own lines when generating both files.
 `;
+
+type Recipe = {
+  title: string;
+  segments: SystemPromptSegmentName[];
+};
+
+export const optionalSystemPromptSegmentRecipes: Recipe[] = [
+  {
+    title: "A frontend-only paywall",
+    segments: ["bitcoin connect (payment modal)", "lightning tools"],
+  },
+  {
+    title:
+      "An app which requires the user to connect to their wallet (e.g. to generate an invoice so they can be paid by the backend)",
+    segments: ["bitcoin connect (WebLN)", "NWC"],
+  },
+];

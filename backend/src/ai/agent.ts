@@ -3,6 +3,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, LanguageModelV1, streamText } from "ai";
 import {
   buildSystemPrompt,
+  optionalSystemPromptSegmentRecipes,
   optionalSystemPromptSegments,
   SystemPromptSegmentName,
 } from "./systemPrompt";
@@ -35,13 +36,16 @@ export const generateSystemPrompt = async (prompt: string, seed: number) => {
   try {
     const { text } = await generateText({
       model: chatModel,
-      system: `You are an expert software architect. Your task is to review the given prompt and figure out which additional knowledge we need. Here are the segments: ${JSON.stringify(
+      system: `You are an expert software architect. Your task is to review the given prompt and figure out if a backend is needed or not, and which additional knowledge we need. Here are the segments: ${JSON.stringify(
         optionalSystemPromptSegments.map((segment) => ({
           name: segment.name,
           usecase: segment.usecase,
           environment: segment.environment,
         }))
       )}. Pay special care to the usecase and environment ("frontend" = it can only be used in the html app, "backend" = it can only be used in the deno code, "any" = can be used in both.)
+
+      Here are some recipes:
+      ${JSON.stringify(optionalSystemPromptSegmentRecipes)}
       
       MANDATORY INSTRUCTIONS:
       Return the EXACT names (exact characters and casing) of the segments from the provided JSON that you think should be used as a JSON string array, without any explanations or surrounding text.`,
