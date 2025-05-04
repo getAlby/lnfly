@@ -37,7 +37,7 @@ FROM node:22
 
 # Install Deno dependencies and Deno itself
 #RUN apk add --no-cache curl unzip
-RUN RUN apt-get update && apt-get install -y curl unzip
+RUN apt-get update && apt-get install -y curl unzip
 RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y
 # Make deno globally available by linking it into a standard path directory
 #RUN ln -s /root/.deno/bin/deno /usr/local/bin/deno
