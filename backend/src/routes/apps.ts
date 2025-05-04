@@ -405,7 +405,10 @@ async function appRoutes(
           return reply.code(404).send({ message: "App not found." });
         }
 
-        if (app.state !== AppState.COMPLETED) {
+        if (
+          app.state !== AppState.COMPLETED &&
+          app.state !== AppState.REVIEWING
+        ) {
           // Maybe return a placeholder or status page instead?
           return reply.code(400).send({
             message: `App generation not complete. Current state: ${app.state}`,
@@ -428,8 +431,8 @@ async function appRoutes(
 
         // Handle backend activity (reset timer or auto-start)
         // We don't need to block the view based on the result here.
-        handleBackendActivity(appId, app, denoManager, fastify.log);
-
+        await handleBackendActivity(appId, app, denoManager, fastify.log);
+        fastify.log.info(`App ${appId} processing HTML.`);
         // Send the HTML content
         let processedHtml = app.html; // Start with original HTML
         if (app.lightningAddress) {
@@ -573,7 +576,7 @@ async function appRoutes(
         }
 
         // Handle backend activity and check readiness for proxying
-        const activityStatus = handleBackendActivity(
+        const activityStatus = await handleBackendActivity(
           appId,
           app,
           denoManager,
@@ -873,12 +876,12 @@ type BackendActivityStatus = "READY" | "STARTING" | "BUSY" | "NO_BACKEND";
  * or attempts to auto-start if stopped.
  * Returns a status indicating the backend's readiness for proxying.
  */
-function handleBackendActivity(
+async function handleBackendActivity(
   appId: number,
   app: { denoCode: string | null; backendState: BackendState | null },
   denoManager: DenoManager,
   logger: FastifyInstance["log"]
-): BackendActivityStatus {
+): Promise<BackendActivityStatus> {
   if (!app.denoCode) {
     return "NO_BACKEND";
   }
@@ -894,13 +897,17 @@ function handleBackendActivity(
         `Attempting to auto-start backend for app ${appId} due to activity.`
       );
       // Start backend (fire-and-forget)
-      denoManager.startAppBackend(appId).catch((err) => {
+      try {
+        await denoManager.startAppBackend(appId);
+        return "READY";
+      } catch (err) {
         logger.error(
           err,
           `Error auto-starting backend for app ${appId} on activity`
         );
-      });
-      return "STARTING"; // Indicate that start was triggered
+        // FIXME: use error status
+        return "BUSY";
+      }
 
     case BackendState.STARTING:
     case BackendState.STOPPING:

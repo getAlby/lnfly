@@ -193,30 +193,34 @@ export class DenoManager {
       let hasStarted = false;
 
       // Simple check: Assume started after a short delay if no immediate error
-      startupTimeout = setTimeout(async () => {
-        if (!hasStarted && !denoProcess.killed) {
-          hasStarted = true;
-          console.log(
-            `App ${appId} assumed started successfully on port ${port}.`
-          );
-          try {
-            await this.prisma.app.update({
-              where: { id: appId },
-              data: { backendState: BackendState.RUNNING, backendPort: port },
-            });
-            console.log(`App ${appId} state updated to RUNNING.`);
-            // Start the inactivity timer now that the app is confirmed running
-            this.scheduleInactivityCheck(appId);
-          } catch (dbError) {
-            console.error(
-              `Failed to update app ${appId} state to RUNNING:`,
-              dbError
+      await new Promise<void>((resolve, reject) => {
+        startupTimeout = setTimeout(async () => {
+          if (!hasStarted && !denoProcess.killed) {
+            hasStarted = true;
+            console.log(
+              `App ${appId} assumed started successfully on port ${port}.`
             );
-            // Attempt to kill process if DB update fails after start
-            await this.stopAppBackend(appId);
+            try {
+              await this.prisma.app.update({
+                where: { id: appId },
+                data: { backendState: BackendState.RUNNING, backendPort: port },
+              });
+              console.log(`App ${appId} state updated to RUNNING.`);
+              // Start the inactivity timer now that the app is confirmed running
+              this.scheduleInactivityCheck(appId);
+              resolve();
+            } catch (dbError) {
+              console.error(
+                `Failed to update app ${appId} state to RUNNING:`,
+                dbError
+              );
+              // Attempt to kill process if DB update fails after start
+              await this.stopAppBackend(appId);
+              reject();
+            }
           }
-        }
-      }, 2000); // 2 second timeout for startup
+        }, 5000); // 5 second timeout for startup
+      });
 
       // 6. Listen for process events
       denoProcess.stdout?.on("data", (data) => {
