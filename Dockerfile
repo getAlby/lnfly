@@ -30,12 +30,14 @@ RUN yarn run db:generate
 RUN yarn build
 
 # ---- Production Stage ----
-FROM node:22-alpine
+#FROM node:22-alpine
+FROM node:22
 
 # Install Deno dependencies and Deno itself
 RUN apk add --no-cache curl unzip
-RUN curl -fsSL https://deno.land/x/install/install.sh | sh
-ENV PATH="/root/.deno/bin:$PATH"
+RUN curl -fsSL https://deno.land/install.sh | sh -s -- -y
+# Make deno globally available by linking it into a standard path directory
+#RUN ln -s /root/.deno/bin/deno /usr/local/bin/deno
 
 WORKDIR /app
 
