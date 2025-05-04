@@ -147,7 +147,13 @@ export class DenoManager {
       // 5. Spawn Deno Process
       const denoProcess = spawn(
         "deno",
-        ["run", "--allow-net", "--allow-env=PORT,NWC_URL", tempFilePath],
+        [
+          "run",
+          "--allow-net",
+          "--allow-env=PORT,NWC_URL",
+          "--v8-flags=--max-heap-size=32,--max-old-space-size=32",
+          tempFilePath,
+        ],
         {
           env: {
             ...process.env,
