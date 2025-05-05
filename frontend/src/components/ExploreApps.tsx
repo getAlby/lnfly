@@ -120,10 +120,13 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
       toast.success("Invoice generated! Opening payment modal...");
 
       // 3. Launch Bitcoin Connect
+      let backendRegisteredZap = false;
       const { setPaid } = launchPaymentModal({
         invoice: invoice,
-        onPaid: (paidResponse) => {
-          console.log("Paid via BC callback:", paidResponse);
+        onPaid: () => {
+          if (!backendRegisteredZap) {
+            return;
+          }
           toast.success("Payment successful!");
           if (paymentCheckIntervalRef.current) {
             clearInterval(paymentCheckIntervalRef.current);
@@ -170,12 +173,27 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
               clearInterval(paymentCheckIntervalRef.current);
               paymentCheckIntervalRef.current = null;
             }
+
+            // Update local state to reflect the new zap amount immediately
+            setCompletedApps((prevApps) =>
+              prevApps.map((app) => {
+                if (app.id === details.appId) {
+                  const currentAmount = app.zapAmount || 0;
+                  const change =
+                    details.zapType === "UPZAP"
+                      ? details.amount
+                      : -details.amount;
+                  return { ...app, zapAmount: currentAmount + change };
+                }
+                return app;
+              })
+            );
+
             // If BC modal is still open, inform it payment is complete.
-            // This covers cases where the onPaid callback might not have fired yet
-            // or if payment happened outside the modal lifecycle.
-            // We need a preimage for setPaid, which we don't get from this endpoint.
-            // The onPaid callback is the main way to update the BC modal UI.
-            setPaid({ preimage: "dummy" }); // Cannot call setPaid without preimage
+            // Using a dummy preimage as we don't get the real one here.
+            // The onPaid callback is the primary way to update the BC modal UI with the correct preimage.
+            backendRegisteredZap = true;
+            setPaid({ preimage: "dummy" }); // Attempt to update BC modal
             toast.success("Payment confirmed!"); // Notify user payment is confirmed backend-side
           } else {
             console.log("Polling: Payment not confirmed yet.");

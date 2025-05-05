@@ -46,7 +46,7 @@ async function appRoutes(
     prompt: string;
     state: AppState;
     title?: string | null; // Add title
-    zapAmount?: number; // Add zapAmount (calculated net amount)
+    zapAmount: number; // Now directly from App model (will be 0 if none)
   }
 
   // Route to get a list of apps with optional filtering
@@ -59,47 +59,30 @@ async function appRoutes(
       const { status } = request.query;
 
       try {
-        let appsData: AppListItem[] = []; // Initialize as empty array
+        let appsData: AppListItem[] = [];
         if (status === "completed") {
-          const completedApps = await prisma.app.findMany({
+          // Fetch apps and include the stored zapAmount
+          appsData = await prisma.app.findMany({
             where: { state: AppState.COMPLETED, published: true },
             select: {
               id: true,
               prompt: true,
               state: true,
               title: true,
-              zaps: {
-                // Select related zaps that are paid
-                where: { paid: true },
-                select: {
-                  amount: true, // Select the amount (in sats)
-                  type: true, // Select the zap type
-                },
-              },
+              zapAmount: true, // Select the stored zap amount
+              // Optionally include zap count if needed (requires separate aggregation or relation count)
+              // _count: { select: { zaps: { where: { paid: true } } } } // Example for count
+            },
+            orderBy: {
+              // Example: Allow sorting by zapAmount if needed later
+              // zapAmount: 'desc',
+              updatedAt: "desc", // Default sort
             },
           });
-
-          // Calculate net zap amount for each app
-          appsData = completedApps.map((app) => {
-            const netZapAmount = app.zaps.reduce((sum, zap) => {
-              if (zap.type === ZapType.UPZAP) {
-                return sum + zap.amount;
-              } else if (zap.type === ZapType.DOWNZAP) {
-                return sum - zap.amount;
-              }
-              return sum; // Should not happen if type is always set
-            }, 0);
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { zaps, ...rest } = app; // Exclude the zaps array from the final object
-            return {
-              ...rest,
-              zapCount: zaps.length,
-              // Only include zapAmount if it's non-zero
-              zapAmount: netZapAmount !== 0 ? netZapAmount : undefined,
-            };
-          });
+          // Map to ensure structure matches AppListItem, handle potential nulls/defaults if necessary
+          // (zapAmount defaults to 0 in schema, so it should exist)
         } else {
-          // Handle other statuses or return empty as before
+          // Handle other statuses or return empty
           appsData = [];
         }
 
@@ -802,8 +785,17 @@ async function appRoutes(
 
       try {
         // Fetch zap record
+        // Fetch zap record including amount and type for potential update
         const zap = await prisma.zap.findUnique({
           where: { id: zapId },
+          select: {
+            id: true,
+            appId: true,
+            paid: true,
+            invoice: true,
+            amount: true,
+            type: true,
+          },
         });
 
         if (!zap) {
@@ -845,14 +837,39 @@ async function appRoutes(
           client.close();
         }
 
-        if (paid) {
-          // Update zap record in DB
-          await prisma.zap.update({
-            where: { id: zapId },
-            data: { paid: true },
-          });
-          fastify.log.info(`Zap ${zapId} for App ${appId} marked as paid.`);
+        // If NWC confirms payment AND the zap is not already marked paid in DB
+        if (paid && !zap.paid) {
+          const amountChange =
+            zap.type === ZapType.UPZAP ? zap.amount : -zap.amount;
+
+          try {
+            // Use transaction to update both Zap and App atomically
+            await prisma.$transaction([
+              prisma.zap.update({
+                where: { id: zapId },
+                data: { paid: true },
+              }),
+              prisma.app.update({
+                where: { id: appId },
+                data: {
+                  zapAmount: {
+                    increment: amountChange,
+                  },
+                },
+              }),
+            ]);
+            fastify.log.info(
+              `Zap ${zapId} for App ${appId} marked as paid. App zapAmount updated by ${amountChange}.`
+            );
+          } catch (txError) {
+            fastify.log.error(
+              txError,
+              `Transaction failed when updating paid status/zapAmount for Zap ID: ${zapId}`
+            );
+            // Don't block response, but log the error. The zap is paid according to NWC.
+          }
         }
+        // Return paid status based on NWC check
         return reply.send({ paid });
       } catch (error) {
         fastify.log.error(
