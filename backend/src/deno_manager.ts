@@ -100,6 +100,11 @@ export class DenoManager {
         return;
       }
 
+      const nwcUrl = app.nwcUrl || process.env.DEFAULT_NWC_URL;
+      if (!nwcUrl) {
+        throw new Error("No NWC URL set");
+      }
+
       if (
         app.backendState !== BackendState.STOPPED &&
         app.backendState !== BackendState.FAILED_TO_START
@@ -169,7 +174,7 @@ export class DenoManager {
             ...process.env,
             PORT: port.toString(),
             // Use app-specific NWC URL if available, otherwise fallback to default
-            NWC_URL: app.nwcUrl || process.env.DEFAULT_NWC_URL,
+            NWC_URL: nwcUrl,
             STORAGE_PATH: storagePath, // Pass the storage path to the Deno app
           },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr

@@ -70,6 +70,7 @@ function AppStatusPage() {
   const [appTitle, setAppTitle] = useState("");
   const [showHtmlModal, setShowHtmlModal] = useState(false);
   const [showBackendModal, setShowBackendModal] = useState(false);
+  const [showBackendStatusModal, setShowBackendStatusModal] = useState(false); // State for Backend Status modal
 
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
@@ -688,7 +689,7 @@ function AppStatusPage() {
                         variant="outline"
                         size="sm"
                       >
-                        💻 View HTML
+                        🧑‍💻️ View HTML
                       </Button>
                     )}
                   {editKey &&
@@ -700,7 +701,20 @@ function AppStatusPage() {
                         variant="outline"
                         size="sm"
                       >
-                        🗄️ View Backend
+                        🦖 View Deno
+                      </Button>
+                    )}
+                  {/* Manage Backend Button */}
+                  {editKey &&
+                    (appData.state === "COMPLETED" ||
+                      appData.state === "REVIEWING") &&
+                    !!appData.denoCode && (
+                      <Button
+                        onClick={() => setShowBackendStatusModal(true)} // Show backend status modal
+                        variant="outline"
+                        size="sm"
+                      >
+                        ⚙️ Manage Backend
                       </Button>
                     )}
                   {/* View System Prompt Button */}
@@ -714,55 +728,40 @@ function AppStatusPage() {
                     </Button>
                   )}
                 </div>
-                {/* System Knowledge Badges */}
-                {editKey && appData.systemPromptSegmentNames && (
-                  <div className="mt-3">
-                    <h4 className="text-sm font-medium mb-1">
-                      System Knowledge
-                    </h4>
-                    <div className="flex flex-wrap gap-1">
-                      {appData.systemPromptSegmentNames.map((name) => (
-                        <Badge key={name} variant="secondary">
-                          {name}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <p className="mt-2">
-                  {" "}
-                  {/* Add margin top to separate from badges */}
-                  Status:{" "}
-                  <span className={`font-semibold ${statusColor}`}>
-                    {statusMessage}
-                    {appData.state === "FAILED" && !!appData.errorMessage && (
-                      <span className="text-sm">: {appData.errorMessage}</span>
+                {appData.state !== "COMPLETED" && (
+                  <p className="mt-2">
+                    {" "}
+                    {/* Add margin top to separate from badges */}
+                    Status:{" "}
+                    <span className={`font-semibold ${statusColor}`}>
+                      {statusMessage}
+                      {appData.state === "FAILED" && !!appData.errorMessage && (
+                        <span className="text-sm">
+                          : {appData.errorMessage}
+                        </span>
+                      )}
+                    </span>
+                    {/* Cancel Button */}
+                    {appData.state === "GENERATING" && editKey && (
+                      <Button
+                        onClick={cancelGeneration}
+                        disabled={isLoading}
+                        variant="destructive"
+                        size="sm"
+                        className="ml-2"
+                      >
+                        Cancel
+                      </Button>
                     )}
-                  </span>
-                  {/* Cancel Button */}
-                  {appData.state === "GENERATING" && editKey && (
-                    <Button
-                      onClick={cancelGeneration}
-                      disabled={isLoading}
-                      variant="destructive"
-                      size="sm"
-                      className="ml-2"
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                </p>
-                {!!appData.numChars && (
+                  </p>
+                )}
+                {!!appData.numChars && appData.state === "GENERATING" && (
                   <p>
                     Characters Generated: {appData.numChars.toLocaleString()}
                   </p>
                 )}
-                <p>Seed: {appData.seed || "undefined"}</p>
-                <p>Created: {new Date(appData.createdAt).toLocaleString()}</p>
-                <p>
-                  Last Update: {new Date(appData.updatedAt).toLocaleString()}
-                </p>
-                <p>
+                {/* <p>Seed: {appData.seed || "undefined"}</p> */}
+                {/* <p>
                   Published:{" "}
                   <span
                     className={`font-semibold ${
@@ -771,63 +770,16 @@ function AppStatusPage() {
                   >
                     {appData.published.toString()}
                   </span>
+                </p> */}
+                <p className="text-sm mt-2">
+                  Created: {new Date(appData.createdAt).toLocaleString()}
+                </p>
+                <p className="text-sm">
+                  Updated: {new Date(appData.updatedAt).toLocaleString()}
                 </p>
               </div>
 
-              {/* --- Backend Status Section --- */}
-              {editKey &&
-                appData.denoCode && ( // Only show if editKey matches and denoCode exists
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="font-semibold mb-2 text-md">
-                      Backend Status
-                    </h4>
-                    <p>
-                      State:{" "}
-                      <span className="font-medium">
-                        {appData.backendState || "Unknown"}
-                      </span>
-                      {appData.backendState === "RUNNING" &&
-                        appData.backendPort && (
-                          <span> (Port: {appData.backendPort})</span>
-                        )}
-                    </p>
-                    <div className="flex gap-2 mt-2">
-                      <Button
-                        onClick={handleStartBackend}
-                        disabled={
-                          isBackendLoading ||
-                          appData.backendState === "RUNNING" ||
-                          appData.backendState === "STARTING" ||
-                          appData.backendState === "STOPPING"
-                        }
-                        size="sm"
-                        variant="outline"
-                      >
-                        {isBackendLoading &&
-                        (appData.backendState === "STARTING" ||
-                          !appData.backendState)
-                          ? "Starting..."
-                          : "Start Backend"}
-                      </Button>
-                      <Button
-                        onClick={handleStopBackend}
-                        disabled={
-                          isBackendLoading ||
-                          appData.backendState === "STOPPED" ||
-                          appData.backendState === "STOPPING" ||
-                          appData.backendState === "FAILED_TO_START"
-                        }
-                        size="sm"
-                        variant="destructive"
-                      >
-                        {isBackendLoading && appData.backendState === "STOPPING"
-                          ? "Stopping..."
-                          : "Stop Backend"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              {/* --- End Backend Status Section --- */}
+              {/* --- Backend Status Section Removed (Moved to Modal) --- */}
 
               {/* Lightning Address Input - Wrapped with conditional logic */}
               {editKey && appData.html?.includes("new LightningAddress(") && (
@@ -859,7 +811,12 @@ function AppStatusPage() {
               {editKey && appData.denoCode?.includes("NWC_URL") && (
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center">
-                    <Label htmlFor="nwc-url">NWC URL</Label>
+                    <Label htmlFor="nwc-url" className="block">
+                      NWC URL
+                      <span className="text-destructive font-bold inline">
+                        *
+                      </span>
+                    </Label>
                     <Button
                       variant="link"
                       size="sm"
@@ -882,30 +839,39 @@ function AppStatusPage() {
               {/* End NWC URL Input */}
 
               {(appData.state === "COMPLETED" ||
-                appData.state === "REVIEWING") && (
-                <a
-                  href={
-                    buttonDisabled
-                      ? "#"
-                      : `/api/apps/${id}/view${
-                          appData.published ? "" : `?previewKey=${previewKey}`
-                        }`
-                  }
-                  target="_blank"
-                >
-                  <Button
-                    disabled={buttonDisabled}
-                    className="mt-4 w-full" // Make button full width
-                    size="lg" // Make button larger
+                appData.state === "REVIEWING") &&
+                (appData.nwcUrl ||
+                  !appData.denoCode ||
+                  import.meta.env.VITE_ALLOW_EMPTY_NWC_URL === "true") && (
+                  <a
+                    href={
+                      buttonDisabled
+                        ? "#"
+                        : `/api/apps/${id}/view${
+                            appData.published ? "" : `?previewKey=${previewKey}`
+                          }`
+                    }
+                    target="_blank"
                   >
-                    {appData.published ? "View app" : "Preview unpublished app"}
-                  </Button>
-                </a>
-              )}
+                    <Button
+                      disabled={buttonDisabled}
+                      className="mt-4 w-full" // Make button full width
+                      size="lg" // Make button larger
+                    >
+                      {appData.published
+                        ? "View app"
+                        : "Preview unpublished app"}
+                    </Button>
+                  </a>
+                )}
               {!appData.published &&
                 appData.state === "COMPLETED" &&
+                (appData.nwcUrl ||
+                  !appData.denoCode ||
+                  import.meta.env.VITE_ALLOW_EMPTY_NWC_URL === "true") &&
                 editKey && (
                   <Button
+                    variant="secondary"
                     disabled={buttonDisabled}
                     className="mt-4 w-full" // Make button full width
                     size="lg" // Make button larger
@@ -980,8 +946,9 @@ function AppStatusPage() {
               What is a NWC Connection Secret?
             </h3>
             <p className="mb-4">
-              NWC gives an app permissioned access to your lightning wallet. You
-              can get a NWC-enabled wallet at:
+              NWC gives an app permissioned access to your lightning wallet.
+              Your Deno backend needs a NWC wallet to function. You can get a
+              NWC-enabled wallet at:
             </p>
             <ul className="list-disc list-inside mb-4">
               <li>
@@ -1128,12 +1095,86 @@ function AppStatusPage() {
                 <CopyIcon className="h-4 w-4" />
               </Button>
             </div>
+            {editKey && appData.systemPromptSegmentNames && (
+              <div className="mb-3">
+                <h4 className="text-sm font-medium mr-1 inline-block">
+                  System Knowledge
+                </h4>
+                <div className="flex-wrap gap-1 inline-flex">
+                  {appData.systemPromptSegmentNames.map((name) => (
+                    <Badge key={name} variant="secondary">
+                      {name}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
             <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
               {appData.systemPrompt}
             </pre>
             <Button
               onClick={() => setShowSystemPromptModal(false)}
               className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Backend Status Modal */}
+      {showBackendStatusModal && appData?.denoCode && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-md w-full">
+            <h3 className="text-lg font-bold mb-4">Manage Backend</h3>
+            <div className="space-y-3">
+              <p>
+                State:{" "}
+                <span className="font-medium">
+                  {appData.backendState || "Unknown"}
+                </span>
+                {appData.backendState === "RUNNING" && appData.backendPort && (
+                  <span> (Port: {appData.backendPort})</span>
+                )}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <Button
+                  onClick={handleStartBackend}
+                  disabled={
+                    isBackendLoading ||
+                    appData.backendState === "RUNNING" ||
+                    appData.backendState === "STARTING" ||
+                    appData.backendState === "STOPPING"
+                  }
+                  size="sm"
+                  variant="outline"
+                >
+                  {isBackendLoading &&
+                  (appData.backendState === "STARTING" || !appData.backendState)
+                    ? "Starting..."
+                    : "Start Backend"}
+                </Button>
+                <Button
+                  onClick={handleStopBackend}
+                  disabled={
+                    isBackendLoading ||
+                    appData.backendState === "STOPPED" ||
+                    appData.backendState === "STOPPING" ||
+                    appData.backendState === "FAILED_TO_START"
+                  }
+                  size="sm"
+                  variant="destructive"
+                >
+                  {isBackendLoading && appData.backendState === "STOPPING"
+                    ? "Stopping..."
+                    : "Stop Backend"}
+                </Button>
+              </div>
+            </div>
+            <Button
+              onClick={() => setShowBackendStatusModal(false)}
+              className="w-full mt-6"
+              variant="outline"
             >
               Close
             </Button>
