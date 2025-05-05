@@ -75,8 +75,8 @@ async function appRoutes(
             },
             orderBy: {
               // Example: Allow sorting by zapAmount if needed later
-              // zapAmount: 'desc',
-              updatedAt: "desc", // Default sort
+              zapAmount: "desc",
+              //updatedAt: "desc", // Default sort
             },
           });
           // Map to ensure structure matches AppListItem, handle potential nulls/defaults if necessary

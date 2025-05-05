@@ -22,7 +22,7 @@ LNFly focuses on simplicity - 1 html file for frontend, and if needed, 1 deno fi
 
 LNFly provides information on how to make payments to the LLM through a system prompt.
 
-Deno is secure by default and can be run as child processes without endangering the parent app. The child processes can access the internet, but not the local filesystem.
+Deno is secure by default and can be run as child processes without endangering the parent app. The child processes can access the internet, but not the local filesystem (except for a single file, which is used for basic storage if the deno app needs it).
 
 ## Features
 
