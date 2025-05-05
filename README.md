@@ -4,6 +4,10 @@ Lightning Fly - A platform to quickly create apps that you can earn through bitc
 
 [Try it now](https://lnfly.fly.dev/)
 
+## Result Quality
+
+No matter how good your prompt is, result quality varies widely. If the app doesn't work, try the "Regenerate" prompt button.
+
 ## Supported Lightning functionality
 
 LNFly has limited knowledge of some lightning tools to enable your generated app to interact with lightning wallets:
@@ -41,7 +45,7 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] Stop app backends automatically after 10 minutes
 - [x] Update dockerfile to add fly
 - [x] Basic data storage for backend apps
-- [ ] Pay to upvote/downvote apps on homepage
+- [x] Pay to upvote/downvote apps on homepage
 - [ ] User accounts
 - [ ] Nostr knowledge
 

@@ -197,40 +197,52 @@ export class DenoManager {
       let startupTimeout: NodeJS.Timeout | null = null;
       let hasStarted = false;
 
-      // Simple check: Assume started after a short delay if no immediate error
-      await new Promise<void>((resolve, reject) => {
-        startupTimeout = setTimeout(async () => {
-          if (!hasStarted && !denoProcess.killed) {
-            hasStarted = true;
-            console.log(
-              `App ${appId} assumed started successfully on port ${port}.`
+      let startupResolver: (() => void) | undefined = undefined;
+      // 6. Listen for process events
+      denoProcess.stdout?.on("data", async (data) => {
+        console.log(`[App ${appId} STDOUT]: ${data.toString().trim()}`);
+
+        if (
+          !hasStarted &&
+          data.toString().includes("Deno server running on port")
+        ) {
+          console.log("Detected startup!", { appId });
+          hasStarted = true;
+
+          console.log(
+            `App ${appId} assumed started successfully on port ${port}.`
+          );
+          try {
+            await this.prisma.app.update({
+              where: { id: appId },
+              data: { backendState: BackendState.RUNNING, backendPort: port },
+            });
+            console.log(`App ${appId} state updated to RUNNING.`);
+            // Start the inactivity timer now that the app is confirmed running
+            this.scheduleInactivityCheck(appId);
+            startupResolver?.();
+          } catch (dbError) {
+            console.error(
+              `Failed to update app ${appId} state to RUNNING:`,
+              dbError
             );
-            try {
-              await this.prisma.app.update({
-                where: { id: appId },
-                data: { backendState: BackendState.RUNNING, backendPort: port },
-              });
-              console.log(`App ${appId} state updated to RUNNING.`);
-              // Start the inactivity timer now that the app is confirmed running
-              this.scheduleInactivityCheck(appId);
-              resolve();
-            } catch (dbError) {
-              console.error(
-                `Failed to update app ${appId} state to RUNNING:`,
-                dbError
-              );
-              // Attempt to kill process if DB update fails after start
-              await this.stopAppBackend(appId);
-              reject();
-            }
+            // Attempt to kill process if DB update fails after start
+            await this.stopAppBackend(appId);
           }
-        }, 5000); // 5 second timeout for startup
+        }
       });
 
-      // 6. Listen for process events
-      denoProcess.stdout?.on("data", (data) => {
-        console.log(`[App ${appId} STDOUT]: ${data.toString().trim()}`);
-        // Potentially detect successful startup message here if Deno code logs one
+      await new Promise<void>((resolve, reject) => {
+        startupResolver = resolve;
+        startupTimeout = setTimeout(async () => {
+          if (hasStarted && !denoProcess.killed) {
+            resolve();
+          } else {
+            console.error("Timeout spawning deno app");
+            await this.stopAppBackend(appId);
+            reject();
+          }
+        }, 9000);
       });
 
       denoProcess.stderr?.on("data", (data) => {
@@ -239,7 +251,10 @@ export class DenoManager {
       });
 
       denoProcess.on("error", async (err) => {
-        console.error(`Failed to spawn Deno process for app ${appId}:`, err);
+        console.error(
+          `Received error from Deno process for app ${appId}:`,
+          err
+        );
         if (startupTimeout) clearTimeout(startupTimeout);
         hasStarted = true;
         await this.handleProcessExit(

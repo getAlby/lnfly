@@ -522,6 +522,9 @@ function AppStatusPage() {
 
     // Set up polling only if not already completed/failed initially
     // We check appData state inside the interval callback as well
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
     intervalRef.current = setInterval(() => {
       // Check state *before* fetching again
       if (!shouldPoll) {
