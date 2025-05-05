@@ -15,16 +15,16 @@ export const suggestions: Suggestion[] = [
     prompt:
       "User has to pay 21 sats before they can see the video https://www.youtube.com/watch?v=dQw4w9WgXcQ&pp=ygUJcmljayByb2xs which will be displayed on the page. The video should auto-start.",
   },
-  {
-    title: "Tetris Paid Themes",
-    prompt:
-      "Make a simple tetris game but before you play you can choose from 3 themes. One is free (standard theme), one costs 21 sats (bitcoin theme), and one costs 42 sats (nostr theme). Controls should be just arrow keys (left/right arrows for movement, up arrow is rotate and down arrow is hard drop). If you lose, there should be a 'You Lose' screen with your score shown, and a button to play again, which you will be presented with the theme picker again.",
-  },
-  {
-    title: "Amazing Button",
-    prompt:
-      "An app that has THE BUTTON. When you click it and pay the 21 sat fee, all sorts of amazing things happen, like fireworks and so forth.",
-  },
+  // {
+  //   title: "Tetris Themes",
+  //   prompt:
+  //     "Make a simple tetris game but before you play you can choose from 3 themes. One is free (standard theme), one costs 21 sats (bitcoin theme), and one costs 42 sats (nostr theme). Controls should be just arrow keys (left/right arrows for movement, up arrow is rotate and down arrow is hard drop). If you lose, there should be a 'You Lose' screen with your score shown, and a button to play again, which you will be presented with the theme picker again.",
+  // },
+  // {
+  //   title: "Amazing Button",
+  //   prompt:
+  //     "An app that has THE BUTTON. When you click it and pay the 21 sat fee, all sorts of amazing things happen, like fireworks and so forth.",
+  // },
   {
     title: "Coinflip",
     hasBackend: true,
@@ -49,5 +49,21 @@ Add a small "view previous links" button below. This will show the links and the
 To generate the invoice that needs to be paid by the user, use NWC.
 
 The backend should store a list of submitted links.`,
+  },
+  {
+    title: "Lightning Faucet",
+    hasBackend: true,
+    prompt: `Make a "Lightning Faucet" app which allows the user to connect their wallet, generate an invoice of exactly 21 sats and the faucet backend will pay it using NWC.
+
+Faucet Backend:
+- Only allow one payout per hour.
+- Parse the invoice to ensure it is exactly 21 sats.
+
+Faucet frontend:
+- Only allow the user to connect their wallet if it was an hour since the last payout, otherwise show a countdown timer and progress bar that shows when the faucet can next be used.
+- If the user can connect their wallet, show a single button "Connect Wallet". Once connected, request a 21 sat invoice and send it to the faucet.
+- Show the last payout time.
+- If the payment succeeds, show a confetti animation and a success message.
+- Style the app with a bitcoin theme and center the content and make it look good.`,
   },
 ];
