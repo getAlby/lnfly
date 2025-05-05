@@ -10,9 +10,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea"; // Import Textarea
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type ZapType = "UPZAP" | "DOWNZAP";
+
+interface Zap {
+  id: number;
+  amount: number;
+  type: ZapType;
+  comment: string | null;
+  createdAt: string;
+}
 
 interface ZapModalProps {
   isOpen: boolean;
@@ -177,8 +185,76 @@ const ZapModal: React.FC<ZapModalProps> = ({
             Generate Invoice
           </Button>
         </DialogFooter>
+        {/* Zap History */}
+        <ZapHistory appId={appId} />
       </DialogContent>
     </Dialog>
+  );
+};
+
+interface ZapHistoryProps {
+  appId: number;
+}
+
+const ZapHistory: React.FC<ZapHistoryProps> = ({ appId }) => {
+  const [zapHistory, setZapHistory] = useState<Zap[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchZapHistory = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(`/api/apps/${appId}/zaps`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch zap history");
+        }
+        const data: Zap[] = await response.json();
+        setZapHistory(data);
+      } catch (error) {
+        console.error(error);
+        setError("Failed to load zap history");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchZapHistory();
+  }, [appId]);
+
+  return (
+    <div className="mt-4">
+      <h3 className="text-lg font-medium mb-2">Recent Zaps</h3>
+      {loading ? (
+        <div className="text-center">Loading zap history...</div>
+      ) : error ? (
+        <div className="text-center text-red-500">{error}</div>
+      ) : (
+        <div>
+          {zapHistory.length > 0 ? (
+            <div className="space-y-2">
+              {zapHistory.map((zap) => (
+                <div key={zap.id} className="border-b pb-2">
+                  <div className="flex justify-between">
+                    <span>
+                      {zap.type === "UPZAP" ? "👍" : "👎"} {zap.amount} sats
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {new Date(zap.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  {zap.comment && (
+                    <p className="text-sm text-gray-600 mt-1">{zap.comment}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">No zaps yet.</p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 

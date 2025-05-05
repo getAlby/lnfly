@@ -769,6 +769,49 @@ async function appRoutes(
     }
   });
 
+  // Route to get paid zaps for an app
+  fastify.get<{ Params: { id: string } }>(
+    "/:id/zaps",
+    async (request, reply) => {
+      const { id } = request.params;
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+
+      try {
+        // Verify app exists first (optional, but good practice)
+        const appExists = await prisma.app.count({ where: { id: appId } });
+        if (appExists === 0) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+
+        // Fetch paid zaps for the app, ordered by amount descending
+        const zaps = await prisma.zap.findMany({
+          where: {
+            appId: appId,
+            paid: true, // Only fetch paid zaps
+          },
+          select: {
+            id: true,
+            amount: true,
+            type: true,
+            comment: true,
+            createdAt: true,
+          },
+          orderBy: {
+            amount: "desc", // Order by highest amount first
+          },
+        });
+
+        return reply.send(zaps);
+      } catch (error) {
+        fastify.log.error(error, `Failed to fetch zaps for App ID: ${appId}`);
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
   // Route to check zap payment status
   fastify.get<{ Params: { appId: string; zapId: string } }>(
     "/:appId/zaps/:zapId/status",
