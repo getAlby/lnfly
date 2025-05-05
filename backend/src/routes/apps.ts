@@ -435,9 +435,9 @@ async function appRoutes(
         fastify.log.info(`App ${appId} processing HTML.`);
         // Send the HTML content
         let processedHtml = app.html; // Start with original HTML
-        if (app.lightningAddress) {
+        if (app.lightningAddress && process.env.DEFAULT_LIGHTNING_ADDRESS) {
           processedHtml = processedHtml.replaceAll(
-            "rolznzfra@getalby.com",
+            process.env.DEFAULT_LIGHTNING_ADDRESS,
             app.lightningAddress
           );
         }

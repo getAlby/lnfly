@@ -1,17 +1,4 @@
-export type SystemPromptSegmentName =
-  | "bitcoin connect (payment modal)"
-  | "bitcoin connect (WebLN)"
-  | "lightning tools"
-  | "NWC";
-
-type SystemPromptSegment = {
-  name: SystemPromptSegmentName;
-  usecase: string;
-  prompt: string;
-  environment: "frontend" | "backend" | "any";
-};
-
-export const optionalSystemPromptSegments: SystemPromptSegment[] = [
+export const optionalSystemPromptSegments = [
   {
     name: "bitcoin connect (payment modal)",
     environment: "frontend",
@@ -66,8 +53,8 @@ You know how to use bitcoin connect on the frontend to connect to a wallet:
   import {requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
   const weblnProvider = await requestProvider();
 
-  // make an invoice
-  const {paymentRequest} = await weblnProvider.makeInvoice({amount: 2}) // 2 sats
+  // make an invoice for 2 sats
+  const {paymentRequest} = await weblnProvider.makeInvoice({amount: 2, defaultMemo: "Optional invoice description"})
 
   // pay an invoice
   const {preimage} = await weblnProvider.sendPayment('lnbc...');
@@ -75,9 +62,23 @@ You know how to use bitcoin connect on the frontend to connect to a wallet:
 </script>
 `,
   },
-  // TODO: add lightning tools tool for decoding invoice
   {
-    name: "lightning tools",
+    name: "lightning tools - parse invoice",
+    environment: "any",
+    usecase:
+      "parse a lightning invoice e.g. to check the amount of satoshis or read the description",
+    prompt: `
+You know how to use lightning tools to parse a BOLT11 lightning invoice:
+
+<script type="module">
+  import { Invoice } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
+
+  const {satoshi, description} = new Invoice({ pr: "lnbc..."});
+  
+</script>`,
+  },
+  {
+    name: "lightning tools - request invoice from lightning address",
     environment: "frontend",
     usecase:
       "fetch a lightning invoice from a lightning address. Enabling this segment will allow the app developer to specify a lightning address to receive payments made by the user interacting with the app and can be used directly from the frontend. If you have a NWC connection to generate the invoice, use that instead",
@@ -87,11 +88,10 @@ You know how to use lightning tools to generate a lightning invoice for a lightn
 <script type="module">
   import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
 
-  // here use the lightning address provided by the user
-  const ln = new LightningAddress("rolznzfra@getalby.com");
+  const ln = new LightningAddress("${process.env.DEFAULT_LIGHTNING_ADDRESS}");
 
   await ln.fetch();
-  const invoice = await ln.requestInvoice({ satoshi: 21 });
+  const invoice = await ln.requestInvoice({ satoshi: 21, comment: "Optional comment" });
 
   // to check if it was paid:
   const paid = await invoice.verifyPayment(); // returns boolean
@@ -121,7 +121,7 @@ const {
 // make invoice
 const {invoice} = await client.makeInvoice({
   amount: 2000, // 2000 millisats = 2 sats
-  description: "NWC Client example"
+  description: "Optional description"
 });
 
 // lookup invoice: (the returned preimage will be set if the invoice has been paid)
@@ -132,7 +132,7 @@ const {preimage} = await client.lookupInvoice({
 // DENO CODE END
 `,
   },
-];
+] as const;
 
 export const buildSystemPrompt = (
   segmentPrompts: string[]
@@ -211,17 +211,24 @@ console.log(\`Deno server running on port \${port}\`);
 
 type Recipe = {
   title: string;
-  segments: SystemPromptSegmentName[];
+  segments: (typeof optionalSystemPromptSegments)[number]["name"][];
 };
 
 export const optionalSystemPromptSegmentRecipes: Recipe[] = [
   {
     title: "A frontend-only paywall",
-    segments: ["bitcoin connect (payment modal)", "lightning tools"],
+    segments: [
+      "bitcoin connect (payment modal)",
+      "lightning tools - request invoice from lightning address",
+    ],
   },
   {
     title:
       "An app which requires the user to connect to their wallet (e.g. to generate an invoice so they can be paid by the backend)",
-    segments: ["bitcoin connect (WebLN)", "NWC"],
+    segments: [
+      "bitcoin connect (WebLN)",
+      "NWC",
+      "lightning tools - parse invoice",
+    ],
   },
 ];

@@ -11,12 +11,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
-type SystemPromptSegmentName =
-  | "bitcoin connect (payment modal)"
-  | "bitcoin connect (WebLN)"
-  | "lightning tools"
-  | "NWC";
-
 // Define the expected structure of the app data from the API
 // Define possible backend states from Prisma enum
 type BackendState =
@@ -46,7 +40,7 @@ interface AppData {
   backendPort?: number | null;
   generatingSection?: string | null; // Add generating section
   systemPrompt?: string;
-  systemPromptSegmentNames?: SystemPromptSegmentName[];
+  systemPromptSegmentNames?: string[];
   seed?: number;
 }
 
@@ -61,7 +55,9 @@ function AppStatusPage() {
   const [promptText, setPromptText] = useState("");
   const [lightningAddress, setLightningAddress] = useState("");
   const [nwcUrl, setNwcUrl] = useState(""); // Add state for NWC URL
-  const [showLearnMoreModal, setShowLearnMoreModal] = useState(false);
+  const [showLightningAddressModal, setShowLightningAddressModal] =
+    useState(false);
+  const [showNWCModal, setShowNWCModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -834,44 +830,43 @@ function AppStatusPage() {
               {/* --- End Backend Status Section --- */}
 
               {/* Lightning Address Input - Wrapped with conditional logic */}
-              {editKey &&
-                (appData.systemPromptSegmentNames?.includes(
-                  "lightning tools"
-                ) ||
-                  (!appData.systemPromptSegmentNames?.length &&
-                    appData.state === "COMPLETED")) && (
-                  <div className="mt-4 space-y-2">
-                    <div className="flex items-center">
-                      <Label htmlFor="lightning-address">
-                        Lightning Address
-                      </Label>
-                      <Button
-                        variant="link"
-                        size="sm"
-                        onClick={() => setShowLearnMoreModal(true)}
-                      >
-                        <InfoIcon className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <div className="flex gap-2">
-                      <Input
-                        id="lightning-address"
-                        placeholder="yourname@getalby.com"
-                        value={lightningAddress}
-                        onChange={(e) => setLightningAddress(e.target.value)}
-                      />
-                      <Button onClick={saveLightningAddress}>Set</Button>
-                    </div>
+              {editKey && appData.html?.includes("new LightningAddress(") && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center">
+                    <Label htmlFor="lightning-address">Lightning Address</Label>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setShowLightningAddressModal(true)}
+                    >
+                      <InfoIcon className="w-4 h-4" />
+                    </Button>
                   </div>
-                )}
+                  <div className="flex gap-2">
+                    <Input
+                      id="lightning-address"
+                      placeholder="yourname@getalby.com"
+                      value={lightningAddress}
+                      onChange={(e) => setLightningAddress(e.target.value)}
+                    />
+                    <Button onClick={saveLightningAddress}>Set</Button>
+                  </div>
+                </div>
+              )}
               {/* End Lightning Address Input */}
 
               {/* NWC URL Input - Added */}
-              {editKey && appData.systemPromptSegmentNames?.includes("NWC") && (
+              {editKey && appData.denoCode?.includes("NWC_URL") && (
                 <div className="mt-4 space-y-2">
                   <div className="flex items-center">
                     <Label htmlFor="nwc-url">NWC URL</Label>
-                    {/* You could add an InfoIcon/Modal here too if desired */}
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setShowNWCModal(true)}
+                    >
+                      <InfoIcon className="w-4 h-4" />
+                    </Button>
                   </div>
                   <div className="flex gap-2">
                     <Input
@@ -936,16 +931,16 @@ function AppStatusPage() {
           </Card>
         </div>
       </main>
-      {/* Learn More Modal */}
-      {showLearnMoreModal && (
+      {showLightningAddressModal && (
         <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
           <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-sm w-full">
             <h3 className="text-lg font-bold mb-4">
               What is a Lightning Address?
             </h3>
             <p className="mb-4">
-              Set your lightning address to earn when users pay within your app.
-              You can get a lightning address at:
+              A lightning address is like an email address, but for receiving
+              money. Set your lightning address to earn when users pay within
+              your app. You can get a lightning address at:
             </p>
             <ul className="list-disc list-inside mb-4">
               <li>
@@ -970,9 +965,47 @@ function AppStatusPage() {
               </li>
             </ul>
             <Button
-              onClick={() => setShowLearnMoreModal(false)}
+              onClick={() => setShowLightningAddressModal(false)}
               className="w-full"
             >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+      {showNWCModal && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">
+              What is a NWC Connection Secret?
+            </h3>
+            <p className="mb-4">
+              NWC gives an app permissioned access to your lightning wallet. You
+              can get a NWC-enabled wallet at:
+            </p>
+            <ul className="list-disc list-inside mb-4">
+              <li>
+                <a
+                  href="https://getalby.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://getalby.com
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://coinos.io"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://coinos.io
+                </a>
+              </li>
+            </ul>
+            <Button onClick={() => setShowNWCModal(false)} className="w-full">
               Close
             </Button>
           </div>

@@ -5,7 +5,6 @@ import {
   buildSystemPrompt,
   optionalSystemPromptSegmentRecipes,
   optionalSystemPromptSegments,
-  SystemPromptSegmentName,
 } from "./systemPrompt";
 
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
@@ -58,7 +57,7 @@ export const generateSystemPrompt = async (prompt: string, seed: number) => {
     let arrayEnd = text.lastIndexOf("]");
     const extractedText = text.slice(arrayStart, arrayEnd + 1);
 
-    segmentNames = JSON.parse(extractedText) as SystemPromptSegmentName[];
+    segmentNames = JSON.parse(extractedText) as string[];
     if (!Array.isArray(segmentNames)) {
       throw new Error("segment names is not an array");
     }
