@@ -1,6 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useEffect, useState } from "react";
+import { launchPaymentModal } from "@getalby/bitcoin-connect-react"; // Import Bitcoin Connect
+import { useEffect, useRef, useState } from "react"; // Added useRef
+import { toast } from "sonner"; // Import toast for notifications
+import ZapModal from "./ZapModal"; // Import the ZapModal component
+
+// Define ZapType locally or import if defined elsewhere
+type ZapType = "UPZAP" | "DOWNZAP";
 
 interface App {
   title?: string;
@@ -19,6 +25,21 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
   const [completedApps, setCompletedApps] = useState<App[]>([]);
   const [isAppsLoading, setIsAppsLoading] = useState(true);
   const [appsError, setAppsError] = useState<string | null>(null);
+  const [isZapModalOpen, setIsZapModalOpen] = useState(false);
+  const [selectedAppForZap, setSelectedAppForZap] = useState<App | null>(null);
+  const [isZapping, setIsZapping] = useState(false); // Loading state for zap process
+
+  // Ref to store the interval ID for clearing later
+  const paymentCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Clear interval on component unmount
+  useEffect(() => {
+    return () => {
+      if (paymentCheckIntervalRef.current) {
+        clearInterval(paymentCheckIntervalRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const fetchCompletedApps = async () => {
@@ -49,6 +70,134 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
     setTimeout(() => {
       onFork(prompt); // Call the prop function to update the prompt in the parent
     }, 500);
+  };
+
+  // Function to handle the submission from the ZapModal
+  const handleZapSubmit = async (details: {
+    amount: number; // sats
+    zapType: ZapType;
+    appId: number;
+    comment?: string;
+  }) => {
+    setIsZapping(true);
+    toast.info("Generating invoice...");
+
+    // Clear any previous interval
+    if (paymentCheckIntervalRef.current) {
+      clearInterval(paymentCheckIntervalRef.current);
+      paymentCheckIntervalRef.current = null;
+    }
+
+    try {
+      // 1. Call backend to create zap and get invoice
+      const response = await fetch(`/api/apps/${details.appId}/zaps`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: details.amount,
+          zapType: details.zapType,
+          comment: details.comment,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(
+          errorData.message || `Failed to create zap (HTTP ${response.status})`
+        );
+      }
+
+      const { invoice, zapId } = await response.json();
+
+      if (!invoice || !zapId) {
+        throw new Error(
+          "Invalid response from server: missing invoice or zapId"
+        );
+      }
+
+      // 2. Close modal
+      setIsZapModalOpen(false);
+      toast.success("Invoice generated! Opening payment modal...");
+
+      // 3. Launch Bitcoin Connect
+      const { setPaid } = launchPaymentModal({
+        invoice: invoice,
+        onPaid: (paidResponse) => {
+          console.log("Paid via BC callback:", paidResponse);
+          toast.success("Payment successful!");
+          if (paymentCheckIntervalRef.current) {
+            clearInterval(paymentCheckIntervalRef.current);
+            paymentCheckIntervalRef.current = null;
+          }
+          // setPaid is called automatically by BC internally if preimage is provided
+          // We might still want to call it here if the backend confirms payment first via polling
+          // but the callback is usually the primary confirmation.
+          // setPaid({ preimage: paidResponse.preimage });
+        },
+        onCancelled: () => {
+          console.log("Payment cancelled");
+          toast.info("Payment cancelled.");
+          if (paymentCheckIntervalRef.current) {
+            clearInterval(paymentCheckIntervalRef.current);
+            paymentCheckIntervalRef.current = null;
+          }
+        },
+      });
+
+      // 4. Start polling backend for payment confirmation
+      paymentCheckIntervalRef.current = setInterval(async () => {
+        try {
+          const statusRes = await fetch(
+            `/api/apps/${details.appId}/zaps/${zapId}/status`
+          );
+          // Stop polling if request fails (e.g., server down)
+          if (!statusRes.ok) {
+            console.error("Failed to check payment status, stopping polling.");
+            if (paymentCheckIntervalRef.current) {
+              clearInterval(paymentCheckIntervalRef.current);
+              paymentCheckIntervalRef.current = null;
+            }
+            // Optionally notify user
+            // toast.error("Could not confirm payment status.");
+            return;
+          }
+
+          const statusData = await statusRes.json();
+
+          if (statusData.paid) {
+            console.log("Payment confirmed via polling. Backend updated.");
+            if (paymentCheckIntervalRef.current) {
+              clearInterval(paymentCheckIntervalRef.current);
+              paymentCheckIntervalRef.current = null;
+            }
+            // If BC modal is still open, inform it payment is complete.
+            // This covers cases where the onPaid callback might not have fired yet
+            // or if payment happened outside the modal lifecycle.
+            // We need a preimage for setPaid, which we don't get from this endpoint.
+            // The onPaid callback is the main way to update the BC modal UI.
+            setPaid({ preimage: "dummy" }); // Cannot call setPaid without preimage
+            toast.success("Payment confirmed!"); // Notify user payment is confirmed backend-side
+          } else {
+            console.log("Polling: Payment not confirmed yet.");
+          }
+        } catch (error) {
+          console.error("Error polling payment status:", error);
+          // Stop polling on unexpected errors
+          if (paymentCheckIntervalRef.current) {
+            clearInterval(paymentCheckIntervalRef.current);
+            paymentCheckIntervalRef.current = null;
+          }
+        }
+      }, 3000); // Poll every 3 seconds
+    } catch (error) {
+      console.error("Zap submission failed:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to initiate zap."
+      );
+      setIsZapModalOpen(false); // Close modal on error too
+    } finally {
+      setIsZapping(false);
+    }
   };
 
   if (isAppsLoading) {
@@ -93,7 +242,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                   {/* Smaller text, truncate prompt to 3 lines, added mb-4 */}
                   {app.prompt}
                 </span>
-                <div className="flex gap-2 justify-end">
+                <div className="flex gap-2 justify-end items-center">
                   {" "}
                   {/* Right-align buttons */}
                   {window.localStorage.getItem(`app_${app.id}_editKey`) && (
@@ -104,7 +253,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                     </a>
                   )}
                   <a href={`/api/apps/${app.id}/view`} target="_blank">
-                    <Button size="sm">View</Button>
+                    <Button size="sm">Run</Button>
                   </a>
                   <Button
                     size="sm"
@@ -116,11 +265,17 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                   {/* Zap Button */}
                   <Button
                     size="sm"
-                    style={{ backgroundColor: "#facc15", color: "black" }} // Yellow background
-                    onClick={() => alert("Coming soon!")} // Placeholder alert
+                    onClick={() => {
+                      setSelectedAppForZap(app);
+                      setIsZapModalOpen(true);
+                    }}
+                    className="bg-yellow-800"
+                    disabled={isZapping} // Disable button while processing
                   >
-                    Zap {app.zapAmount ? `(${app.zapAmount})` : ""}{" "}
-                    {/* Display zap amount if available */}
+                    {isZapping && selectedAppForZap?.id === app.id
+                      ? "Zapping..."
+                      : `⚡ ${app.zapAmount || 0}`}
+                    {/* Display zap amount if available and non-zero */}
                   </Button>
                 </div>
               </CardContent>
@@ -128,6 +283,16 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
           </li>
         ))}
       </ul>
+      {/* Render the Zap Modal */}
+      {selectedAppForZap && (
+        <ZapModal
+          isOpen={isZapModalOpen}
+          onClose={() => setIsZapModalOpen(false)}
+          onSubmit={handleZapSubmit}
+          appName={selectedAppForZap.title || "Untitled App"}
+          appId={selectedAppForZap.id}
+        />
+      )}
     </div>
   );
 }

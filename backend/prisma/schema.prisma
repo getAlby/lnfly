@@ -32,6 +32,7 @@ model App {
   systemPrompt String?
   systemPromptSegmentNames String?
   seed Int?
+  zaps Zap[] // Relation to Zaps
 }
 
 enum AppState {
@@ -49,4 +50,24 @@ enum BackendState {
   RUNNING
   STOPPING
   FAILED_TO_START
+}
+
+model Zap {
+  id        Int      @id @default(autoincrement())
+  appId     Int
+  app       App      @relation(fields: [appId], references: [id])
+  amount    Int // Store amount in sats
+  type      ZapType
+  comment   String? // Optional user comment
+  invoice   String   @unique // BOLT11 invoice
+  paid      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([appId])
+}
+
+enum ZapType {
+  UPZAP
+  DOWNZAP
 }

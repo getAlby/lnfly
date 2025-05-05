@@ -1,10 +1,13 @@
-import { AppState, BackendState, PrismaClient } from "@prisma/client"; // Import Prisma Client & Enums
+import { nwc } from "@getalby/sdk"; // Import NWCClient
+import { AppState, BackendState, PrismaClient, ZapType } from "@prisma/client"; // Import Prisma Client & Enums
 import {
   FastifyInstance,
   FastifyPluginOptions,
   FastifyReply,
   FastifyRequest,
 } from "fastify";
+import "websocket-polyfill";
+import { z } from "zod"; // Import Zod for validation
 import {
   evaluatePrompt,
   executePrompt,
@@ -42,7 +45,8 @@ async function appRoutes(
     id: number;
     prompt: string;
     state: AppState;
-    // Add other fields if selected in the prisma query
+    title?: string | null; // Add title
+    zapAmount?: number; // Add zapAmount (calculated net amount)
   }
 
   // Route to get a list of apps with optional filtering
@@ -55,27 +59,51 @@ async function appRoutes(
       const { status } = request.query;
 
       try {
-        let apps: AppListItem[]; // Explicitly type the apps variable
+        let appsData: AppListItem[] = []; // Initialize as empty array
         if (status === "completed") {
-          apps = await prisma.app.findMany({
+          const completedApps = await prisma.app.findMany({
             where: { state: AppState.COMPLETED, published: true },
             select: {
-              // Select only necessary fields for the list view
               id: true,
               prompt: true,
               state: true,
               title: true,
-              // Include other fields if needed in the list view
+              zaps: {
+                // Select related zaps that are paid
+                where: { paid: true },
+                select: {
+                  amount: true, // Select the amount (in sats)
+                  type: true, // Select the zap type
+                },
+              },
             },
           });
+
+          // Calculate net zap amount for each app
+          appsData = completedApps.map((app) => {
+            const netZapAmount = app.zaps.reduce((sum, zap) => {
+              if (zap.type === ZapType.UPZAP) {
+                return sum + zap.amount;
+              } else if (zap.type === ZapType.DOWNZAP) {
+                return sum - zap.amount;
+              }
+              return sum; // Should not happen if type is always set
+            }, 0);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { zaps, ...rest } = app; // Exclude the zaps array from the final object
+            return {
+              ...rest,
+              zapCount: zaps.length,
+              // Only include zapAmount if it's non-zero
+              zapAmount: netZapAmount !== 0 ? netZapAmount : undefined,
+            };
+          });
         } else {
-          // For now, if status is not 'completed', return an empty array or handle other statuses later
-          // Or, you could return all apps:
-          // apps = await prisma.app.findMany();
-          apps = []; // Returning empty array for now if status is not 'completed'
+          // Handle other statuses or return empty as before
+          appsData = [];
         }
 
-        return reply.send(apps);
+        return reply.send(appsData);
       } catch (error) {
         fastify.log.error(error, `Failed to fetch apps with status: ${status}`);
         return reply.code(500).send({ message: "Internal Server Error." });
@@ -654,6 +682,184 @@ async function appRoutes(
           error,
           `Failed to process proxy request for app ID: ${appId}`
         );
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
+
+  // --- Zap Routes ---
+
+  // Schema for creating a zap
+  const CreateZapSchema = z.object({
+    amount: z
+      .number()
+      .int()
+      .positive("Amount must be a positive integer (sats)"),
+    zapType: z.nativeEnum(ZapType),
+    comment: z.string().optional(),
+  });
+
+  // Route to create a zap and generate an invoice
+  fastify.post<{
+    Params: { id: string };
+    Body: z.infer<typeof CreateZapSchema>;
+  }>("/:id/zaps", async (request, reply) => {
+    const { id } = request.params;
+    const appId = parseInt(id, 10);
+
+    if (isNaN(appId)) {
+      return reply.code(400).send({ message: "Invalid App ID format." });
+    }
+
+    // Validate request body
+    const validationResult = CreateZapSchema.safeParse(request.body);
+    if (!validationResult.success) {
+      return reply.code(400).send({
+        message: "Invalid request body.",
+        errors: validationResult.error.errors,
+      });
+    }
+    const { amount, zapType, comment } = validationResult.data;
+
+    try {
+      // Verify app exists
+      const app = await prisma.app.findUnique({
+        where: { id: appId },
+        select: { id: true }, // Only need to confirm existence
+      });
+      if (!app) {
+        return reply.code(404).send({ message: "App not found." });
+      }
+
+      // Get NWC URL from environment
+      const nwcUrl = process.env.SERVICE_NWC_URL;
+      if (!nwcUrl) {
+        fastify.log.error("SERVICE_NWC_URL is not configured.");
+        return reply
+          .code(500)
+          .send({ message: "NWC service is not configured." });
+      }
+
+      // Initialize NWC client
+      const client = new nwc.NWCClient({ nostrWalletConnectUrl: nwcUrl });
+
+      try {
+        // Generate invoice
+        const description = comment || `Zap for App #${appId} (${zapType})`;
+        const invoiceResponse = await client.makeInvoice({
+          amount: amount * 1000, // Convert sats to msats for NWC
+          description: description,
+          // Add expiry if needed, e.g., expiry: 3600 // 1 hour
+        });
+
+        if (!invoiceResponse || !invoiceResponse.invoice) {
+          throw new Error("Failed to generate invoice via NWC.");
+        }
+
+        // Create Zap record in DB
+        const zap = await prisma.zap.create({
+          data: {
+            appId: appId,
+            amount: amount, // Store amount in sats
+            type: zapType,
+            comment: comment,
+            invoice: invoiceResponse.invoice,
+            paid: false,
+          },
+          select: {
+            id: true,
+            invoice: true,
+          },
+        });
+
+        fastify.log.info(
+          `Created Zap ${zap.id} for App ${appId}, amount: ${amount} sats.`
+        );
+        return reply.code(201).send({ invoice: zap.invoice, zapId: zap.id });
+      } finally {
+        client.close();
+      }
+    } catch (error) {
+      fastify.log.error(error, `Failed to create zap for App ID: ${appId}`);
+      // Check for specific NWC errors if possible/needed
+      return reply.code(500).send({ message: "Internal Server Error." });
+    }
+  });
+
+  // Route to check zap payment status
+  fastify.get<{ Params: { appId: string; zapId: string } }>(
+    "/:appId/zaps/:zapId/status",
+    async (request, reply) => {
+      const { appId: appIdStr, zapId: zapIdStr } = request.params;
+      const appId = parseInt(appIdStr, 10);
+      const zapId = parseInt(zapIdStr, 10);
+
+      if (isNaN(appId) || isNaN(zapId)) {
+        return reply
+          .code(400)
+          .send({ message: "Invalid App ID or Zap ID format." });
+      }
+
+      try {
+        // Fetch zap record
+        const zap = await prisma.zap.findUnique({
+          where: { id: zapId },
+        });
+
+        if (!zap) {
+          return reply.code(404).send({ message: "Zap record not found." });
+        }
+
+        // Verify zap belongs to the correct app
+        if (zap.appId !== appId) {
+          return reply
+            .code(403)
+            .send({ message: "Zap does not belong to this app." });
+        }
+
+        // If already marked as paid, return immediately
+        if (zap.paid) {
+          return reply.send({ paid: true });
+        }
+
+        // Get NWC URL from environment
+        const nwcUrl = process.env.SERVICE_NWC_URL;
+        if (!nwcUrl) {
+          fastify.log.error("SERVICE_NWC_URL is not configured.");
+          return reply
+            .code(500)
+            .send({ message: "NWC service is not configured." });
+        }
+
+        // Initialize NWC client
+        const client = new nwc.NWCClient({ nostrWalletConnectUrl: nwcUrl });
+
+        let paid = false;
+        try {
+          // Look up invoice status
+          const lookupResponse = await client.lookupInvoice({
+            invoice: zap.invoice,
+          });
+          paid = !!lookupResponse.preimage;
+        } finally {
+          client.close();
+        }
+
+        if (paid) {
+          // Update zap record in DB
+          await prisma.zap.update({
+            where: { id: zapId },
+            data: { paid: true },
+          });
+          fastify.log.info(`Zap ${zapId} for App ${appId} marked as paid.`);
+        }
+        return reply.send({ paid });
+      } catch (error) {
+        fastify.log.error(
+          error,
+          `Failed to check status for Zap ID: ${zapId}, App ID: ${appId}`
+        );
+        // Check for specific NWC errors if possible/needed
         return reply.code(500).send({ message: "Internal Server Error." });
       }
     }
