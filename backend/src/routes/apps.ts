@@ -190,6 +190,7 @@ async function appRoutes(
                 generatingSection: app.generatingSection,
                 systemPrompt: app.systemPrompt,
                 nwcUrl: app.nwcUrl,
+                fullOutput: app.fullOutput,
               }
             : {}),
           ...(app.published || request.query.editKey === app.editKey
@@ -376,6 +377,7 @@ async function appRoutes(
           backendPort: null,
           systemPrompt: null,
           systemPromptSegmentNames: null,
+          fullOutput: null,
         },
       });
 
@@ -1064,6 +1066,7 @@ async function executePromptAndUpdateDb(
         numChars: generatedCharsCount, // Ensure count is saved before review
         denoCode: generatedDenoCode, // Save extracted Deno code (null if not generated)
         backendState: generatedDenoCode ? BackendState.STOPPED : undefined, // Set initial backend state if code exists
+        fullOutput,
       },
     });
 

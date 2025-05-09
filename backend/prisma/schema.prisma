@@ -34,6 +34,7 @@ model App {
   seed Int?
   zaps Zap[] // Relation to Zaps
   zapAmount Int @default(0) // Net zap amount (sats)
+  fullOutput String?
 }
 
 enum AppState {

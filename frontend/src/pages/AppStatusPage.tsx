@@ -42,6 +42,7 @@ interface AppData {
   systemPrompt?: string;
   systemPromptSegmentNames?: string[];
   seed?: number;
+  fullOutput?: string;
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
@@ -60,6 +61,7 @@ function AppStatusPage() {
   const [showNWCModal, setShowNWCModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
+  const [showFullOutputModal, setShowFullOutputModal] = useState(false); // State for System Prompt modal
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   // Ref to hold the latest appData for use in interval callbacks
   const appDataRef = useRef(appData);
@@ -730,6 +732,15 @@ function AppStatusPage() {
                       📄 View System Prompt
                     </Button>
                   )}
+                  {appData.fullOutput && (
+                    <Button
+                      onClick={() => setShowFullOutputModal(true)}
+                      variant="outline"
+                      size="sm"
+                    >
+                      📄 Full Output
+                    </Button>
+                  )}
                 </div>
                 {appData.state !== "COMPLETED" && (
                   <p className="mt-2">
@@ -1117,6 +1128,35 @@ function AppStatusPage() {
             </pre>
             <Button
               onClick={() => setShowSystemPromptModal(false)}
+              className="w-full mt-auto"
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* View Full Output Modal */}
+      {showFullOutputModal && appData?.fullOutput && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-3xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">View Full Output</h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => copyToClipboard(appData.fullOutput || "")}
+                title="Copy System Prompt"
+              >
+                <CopyIcon className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
+              {appData.fullOutput}
+            </pre>
+            <Button
+              onClick={() => setShowFullOutputModal(false)}
               className="w-full mt-auto"
             >
               Close
