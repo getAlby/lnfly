@@ -158,6 +158,7 @@ function AppStatusPage() {
       }
 
       toast(`Lightning Address updated successfully.`);
+      fetchStatus();
     } catch (error) {
       console.error("Error setting Lightning Address:", error);
       alert(
@@ -199,6 +200,7 @@ function AppStatusPage() {
       }
 
       toast(`NWC URL updated successfully.`);
+      fetchStatus();
     } catch (error) {
       console.error("Error setting NWC URL:", error);
       alert(
