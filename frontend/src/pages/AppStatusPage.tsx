@@ -2,8 +2,23 @@ import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
 import { Badge } from "@/components/ui/badge"; // Import Badge
 import { Button } from "@/components/ui/button"; // Import Button
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"; // Import Dialog components
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"; // Import Select components
 import { Textarea } from "@/components/ui/textarea";
 import { copyToClipboard } from "@/lib/clipboard";
 import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
@@ -43,9 +58,15 @@ interface AppData {
   systemPromptSegmentNames?: string[];
   seed?: number;
   fullOutput?: string;
+  model?: string; // Add model field
 }
 
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
+const AVAILABLE_MODELS = [
+  "deepseek/deepseek-chat:free",
+  "google/gemini-2.5-pro-preview",
+  "openai/gpt-4o-mini",
+];
 
 function AppStatusPage() {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +83,8 @@ function AppStatusPage() {
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
   const [showFullOutputModal, setShowFullOutputModal] = useState(false); // State for System Prompt modal
+  const [showRegenerateModal, setShowRegenerateModal] = useState(false);
+  const [selectedModel, setSelectedModel] = useState(AVAILABLE_MODELS[0]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   // Ref to hold the latest appData for use in interval callbacks
   const appDataRef = useRef(appData);
@@ -211,11 +234,9 @@ function AppStatusPage() {
     }
   };
 
-  const regenerateApp = async () => {
-    if (!id || !editKey || !appData || appData.published) {
-      console.error(
-        "Cannot regenerate: Missing ID/key, no data, or app is published."
-      );
+  const openRegenerateModal = () => {
+    if (!appData) return;
+    if (appData.published) {
       toast.error("Regeneration is only possible for unpublished apps.");
       return;
     }
@@ -223,15 +244,17 @@ function AppStatusPage() {
       toast.error("Prompt cannot be empty.");
       return;
     }
-    if (
-      appData.state === "COMPLETED" &&
-      !confirm(
-        "Are you sure you wish to re-generate the app? the current app will be lost."
-      )
-    ) {
+    setSelectedModel(appData.model || AVAILABLE_MODELS[0]);
+    setShowRegenerateModal(true);
+  };
+
+  const handleConfirmRegenerate = async () => {
+    if (!id || !editKey || !appData) {
+      console.error("Cannot regenerate: Missing ID/key or appData.");
       return;
     }
 
+    setShowRegenerateModal(false);
     setIsLoading(true); // Indicate loading state
     try {
       const response = await fetch(
@@ -241,7 +264,7 @@ function AppStatusPage() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ prompt: promptText }),
+          body: JSON.stringify({ prompt: promptText, model: selectedModel }),
         }
       );
 
@@ -256,10 +279,17 @@ function AppStatusPage() {
 
       // Optimistically update state and restart polling
       setAppData((prev) =>
-        prev ? { ...prev, state: "GENERATING", errorMessage: undefined } : null
+        prev
+          ? {
+              ...prev,
+              state: "GENERATING",
+              errorMessage: undefined,
+              model: selectedModel,
+            }
+          : null
       );
       setError(null); // Clear previous errors
-      toast.info(`App ${id} regeneration started.`);
+      toast.info(`App ${id} regeneration started with model ${selectedModel}.`);
       fetchStatus(true); // Immediately fetch status and restart polling if needed
     } catch (error) {
       console.error("Error regenerating app:", error);
@@ -308,6 +338,9 @@ function AppStatusPage() {
         }
         if (!nwcUrl) {
           setNwcUrl(data.nwcUrl || ""); // Initialize NWC URL input
+        }
+        if (data.model && isInitialLoad) {
+          setSelectedModel(data.model);
         }
         setError(null); // Clear error on successful fetch
 
@@ -670,7 +703,7 @@ function AppStatusPage() {
                     (appData.state === "COMPLETED" ||
                       appData.state === "FAILED") && (
                       <Button
-                        onClick={regenerateApp}
+                        onClick={openRegenerateModal}
                         disabled={isLoading}
                         variant="outline"
                         size="sm"
@@ -1128,6 +1161,12 @@ function AppStatusPage() {
                 </div>
               </div>
             )}
+            {appData.model && (
+              <div className="mb-3">
+                <h4 className="text-sm font-medium mr-1 inline-block">Model</h4>
+                <Badge variant="secondary">{appData.model}</Badge>
+              </div>
+            )}
             <pre className="text-sm whitespace-pre-wrap font-mono bg-muted p-3 rounded mb-4 overflow-auto flex-grow">
               {appData.systemPrompt}
             </pre>
@@ -1238,6 +1277,57 @@ function AppStatusPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Regenerate App Modal */}
+      {showRegenerateModal && (
+        <Dialog
+          open={showRegenerateModal}
+          onOpenChange={setShowRegenerateModal}
+        >
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Regenerate App</DialogTitle>
+              <DialogDescription>
+                Are you sure you wish to re-generate the app? The current app
+                will be lost.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="model-select" className="text-right pt-2.5">
+                  Model
+                </Label>
+                <div className="col-span-3">
+                  <Select
+                    value={selectedModel}
+                    onValueChange={setSelectedModel}
+                  >
+                    <SelectTrigger id="model-select">
+                      <SelectValue placeholder="Select a model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AVAILABLE_MODELS.map((model) => (
+                        <SelectItem key={model} value={model}>
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowRegenerateModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button onClick={handleConfirmRegenerate}>Confirm</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

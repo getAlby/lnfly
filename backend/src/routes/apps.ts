@@ -135,7 +135,7 @@ async function appRoutes(
 
         // 3. Start generation in the background (fire and forget)
         // We don't await this promise
-        executePromptAndUpdateDb(fastify, prisma, app.id, prompt); // Pass denoManager
+        executePromptAndUpdateDb(fastify, prisma, app.id, prompt, undefined);
       } catch (error) {
         fastify.log.error(
           error,
@@ -196,6 +196,7 @@ async function appRoutes(
           ...(app.published || request.query.editKey === app.editKey
             ? {
                 // Publicly visible or previewable fields
+                model: app.model, // Return model
                 html: app.html,
                 lightningAddress: app.lightningAddress,
                 prompt: app.prompt,
@@ -315,6 +316,7 @@ async function appRoutes(
   // Define the expected body structure for regenerating an app
   interface RegenerateAppBody {
     prompt: string;
+    model: string; // Add model to body
   }
 
   // Route to regenerate an app
@@ -325,7 +327,7 @@ async function appRoutes(
   }>("/:id/regenerate", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { prompt } = request.body;
+    const { prompt, model } = request.body; // Extract model
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -339,6 +341,11 @@ async function appRoutes(
     if (!prompt || typeof prompt !== "string" || prompt.trim() === "") {
       return reply.code(400).send({
         message: "Prompt is required and must be a non-empty string.",
+      });
+    }
+    if (!model || typeof model !== "string" || model.trim() === "") {
+      return reply.code(400).send({
+        message: "Model is required and must be a non-empty string.",
       });
     }
 
@@ -366,7 +373,8 @@ async function appRoutes(
       await prisma.app.update({
         where: { id: appId },
         data: {
-          prompt: prompt,
+          prompt,
+          model,
           state: AppState.INITIALIZING,
           html: null, // Clear previous results
           numChars: 0,
@@ -391,7 +399,7 @@ async function appRoutes(
       reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
 
       // Start generation in the background (fire and forget)
-      executePromptAndUpdateDb(fastify, prisma, appId, prompt); // Pass denoManager
+      executePromptAndUpdateDb(fastify, prisma, appId, prompt, model); // Pass model
     } catch (error) {
       fastify.log.error(error, `Failed to regenerate app for ID: ${appId}`);
       if (!reply.sent) {
@@ -996,7 +1004,8 @@ async function executePromptAndUpdateDb(
   fastify: FastifyInstance,
   prisma: PrismaClient,
   appId: number,
-  prompt: string
+  prompt: string,
+  model: string | undefined // Add model parameter
 ) {
   let fullOutput = ""; // Store the full AI output
   let generatedHtml: string | null = null;
@@ -1010,16 +1019,21 @@ async function executePromptAndUpdateDb(
     // based on the prompt we give it specific knowledge
     const { systemPrompt, segmentNames } = await generateSystemPrompt(
       prompt,
-      seed
+      seed,
+      model // Pass model to system prompt generation
     );
 
     await prisma.app.update({
       where: { id: appId },
-      data: { systemPrompt, systemPromptSegmentNames: segmentNames.join(",") },
+      data: {
+        systemPrompt,
+        systemPromptSegmentNames: segmentNames.join(","),
+        model, // Save the model used for this generation
+      },
     });
 
     // Get the stream from the updated executePrompt
-    const outputStream = executePrompt(prompt, systemPrompt, seed);
+    const outputStream = executePrompt(prompt, systemPrompt, seed, model); // Pass model to executePrompt
 
     let currentLine = "";
     // Process the stream chunk by chunk
@@ -1124,8 +1138,8 @@ async function executePromptAndUpdateDb(
     // Generate title and evaluate prompt after successful HTML generation
     fastify.log.info(`App ${appId} generating title and evaluating prompt...`);
     const [generatedTitle, promptEvaluation] = await Promise.all([
-      generateAppTitle(generatedHtml, seed),
-      evaluatePrompt(prompt, systemPrompt, seed),
+      generateAppTitle(generatedHtml, seed, model), // Pass model
+      evaluatePrompt(prompt, systemPrompt, seed, model), // Pass model
     ]);
     fastify.log.info(
       `App ${appId} title: ${generatedTitle}, evaluation score: ${

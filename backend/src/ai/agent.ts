@@ -1,4 +1,3 @@
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { generateText, LanguageModelV1, streamText } from "ai";
 import {
@@ -8,34 +7,38 @@ import {
 } from "./systemPrompt";
 
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-const geminiApiKey = process.env.GEMINI_API_KEY;
-let chatModel: LanguageModelV1;
+//const geminiApiKey = process.env.GEMINI_API_KEY;
+const defaultModel = "deepseek/deepseek-chat:free";
 
-if (geminiApiKey) {
-  const modelName = "gemini-2.5-pro-exp-03-25";
-  const google = createGoogleGenerativeAI({
-    apiKey: geminiApiKey,
-  });
-  chatModel = google(modelName);
-} else {
+// Helper function to get the chat model instance
+const getChatModel = (modelName: string | undefined): LanguageModelV1 => {
+  /*if (geminiApiKey) {
+    const google = createGoogleGenerativeAI({ apiKey: geminiApiKey });
+    // Extract the specific model identifier after "google/"
+    const specificModelName = modelName.substring("google/".length);
+    return google(specificModelName as any); // Use 'as any' if specific model names are not strictly typed in SDK
+  } else {*/
   if (!openRouterApiKey) {
-    throw new Error("No API key provided");
+    throw new Error(
+      "OpenRouter API key is not configured for model: " + modelName
+    );
   }
-  const modelName = "deepseek/deepseek-chat:free";
-  //const modelName = "google/gemini-2.5-pro-exp-03-25";
-  //const modelName = "deepseek/deepseek-chat-v3-0324:free";
-  const openrouter = createOpenRouter({
-    apiKey: openRouterApiKey,
-  });
-  chatModel = openrouter.chat(modelName);
-}
+  const openrouter = createOpenRouter({ apiKey: openRouterApiKey });
+  return openrouter.chat(modelName || defaultModel);
+  //}
+};
 
-export const generateSystemPrompt = async (prompt: string, seed: number) => {
+export const generateSystemPrompt = async (
+  prompt: string,
+  seed: number,
+  modelName: string | undefined
+) => {
   const segmentPrompts: string[] = [];
   let segmentNames: string[] = [];
+  const selectedChatModel = getChatModel(modelName);
   try {
     const { text } = await generateText({
-      model: chatModel,
+      model: selectedChatModel,
       system: `You are an expert software architect. Your task is to review the given prompt and figure out if a backend is needed or not, and which additional knowledge we need. Here are the segments: ${JSON.stringify(
         optionalSystemPromptSegments.map((segment) => ({
           name: segment.name,
@@ -91,9 +94,11 @@ export const generateSystemPrompt = async (prompt: string, seed: number) => {
 export const executePrompt = (
   prompt: string,
   systemPrompt: string,
-  seed: number
+  seed: number,
+  modelName: string | undefined
 ): AsyncIterable<string> => {
-  console.log("Streaming from OpenRouter for prompt:", prompt);
+  console.log(`Streaming from ${modelName} for prompt:`, prompt);
+  const selectedChatModel = getChatModel(modelName);
 
   console.log("System prompt: ", systemPrompt);
 
@@ -103,7 +108,7 @@ export const executePrompt = (
   // from a synchronous function.
   async function* generateStream(): AsyncIterable<string> {
     const { textStream } = await streamText({
-      model: chatModel,
+      model: selectedChatModel,
       system: systemPrompt,
       seed,
       prompt,
@@ -124,11 +129,13 @@ export const executePrompt = (
 // Function to generate a short title for the app based on the prompt
 export const generateAppTitle = async (
   html: string,
-  seed: number
+  seed: number,
+  modelName: string | undefined
 ): Promise<string> => {
+  const selectedChatModel = getChatModel(modelName);
   try {
     const { text } = await generateText({
-      model: chatModel,
+      model: selectedChatModel,
       system: `You are an expert copywriter. Your task is to generate a concise and catchy title for a web application based on the given HTML. If you find a title in the app, use that. Otherwise, generate one. Only output the title itself, without any explanations or surrounding text.`,
       prompt: `Generate a title for an app described as follows: "${html}"`,
       seed,
@@ -147,8 +154,10 @@ export const generateAppTitle = async (
 export const evaluatePrompt = async (
   prompt: string,
   systemPrompt: string,
-  seed: number
+  seed: number,
+  modelName: string | undefined
 ): Promise<string> => {
+  const selectedChatModel = getChatModel(modelName);
   // Combine the user prompt with the system prompt used for generation for context
   const fullPromptContext = `
 System Prompt for App Generation:
@@ -164,7 +173,7 @@ ${prompt}
 
   try {
     const { text } = await generateText({
-      model: chatModel,
+      model: selectedChatModel,
       system: `You are an AI assistant specialized in evaluating the clarity and effectiveness of prompts given to a web development AI. Your task is to analyze the provided prompt context (which includes both the system instructions and the user's specific request) and provide constructive feedback.
 
       Follow these steps:

@@ -35,6 +35,7 @@ model App {
   zaps Zap[] // Relation to Zaps
   zapAmount Int @default(0) // Net zap amount (sats)
   fullOutput String?
+  model       String @default("deepseek/deepseek-chat:free")
 }
 
 enum AppState {
