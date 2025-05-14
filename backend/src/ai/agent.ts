@@ -21,8 +21,9 @@ if (geminiApiKey) {
   if (!openRouterApiKey) {
     throw new Error("No API key provided");
   }
-  const modelName = "deepseek/deepseek-chat-v3-0324:free";
-  //const modelName = "deepseek/deepseek-chat:free";
+  const modelName = "deepseek/deepseek-chat:free";
+  //const modelName = "google/gemini-2.5-pro-exp-03-25";
+  //const modelName = "deepseek/deepseek-chat-v3-0324:free";
   const openrouter = createOpenRouter({
     apiKey: openRouterApiKey,
   });
@@ -115,7 +116,6 @@ export const executePrompt = (
     });
     // Yield each part of the stream as it comes in
     yield* textStream;
-    console.log("Finished streaming from OpenRouter.");
   }
 
   return generateStream();
