@@ -1025,7 +1025,7 @@ async function executePromptAndUpdateDb(
     }
 
     // --- Parse the full output ---
-    const htmlStartMarker = "<html>";
+    const htmlStartMarker = "<html";
     const htmlEndMarker = "</html>";
     const denoStartMarker = "// DENO_START";
     const denoEndMarker = "// DENO_END";
@@ -1035,13 +1035,12 @@ async function executePromptAndUpdateDb(
     const denoStartIndex = fullOutput.indexOf(denoStartMarker);
     const denoEndIndex = fullOutput.indexOf(denoEndMarker);
 
+    console.log("Full output", fullOutput);
+
     if (htmlStartIndex !== -1 && htmlEndIndex !== -1) {
       generatedHtml = fullOutput
         .substring(htmlStartIndex, htmlEndIndex + htmlEndMarker.length)
         .trim();
-    } else {
-      // Assume the whole output is HTML if markers are missing
-      generatedHtml = fullOutput.trim();
     }
 
     if (denoStartIndex !== -1 && denoEndIndex !== -1) {
