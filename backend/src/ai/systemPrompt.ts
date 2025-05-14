@@ -1,137 +1,17 @@
+import { knowledgeBitcoinConnectPaymentDialog } from "./knowledge/bitcoin_connect_payment_dialog";
+import { knowledgeBitcoinConnectWebln } from "./knowledge/bitcoin_connect_webln";
+import { knowledgeDeno } from "./knowledge/deno";
+import { knowledgeLightningToolsParseInvoice } from "./knowledge/lightning_tools_parse_invoice";
+import { knowledgeLightningToolsRequestInvoice } from "./knowledge/lightning_tools_request_invoice";
+import { knowledgeNWC } from "./knowledge/nwc";
+
 export const optionalSystemPromptSegments = [
-  {
-    name: "bitcoin connect (payment modal)",
-    environment: "frontend",
-    usecase:
-      "Pay an invoice and do something once the invoice was paid. If you need other wallet interaction from the user, this is not the right segment for you. IMPORTANT: this segment cannot be used on its own, it needs another segment for invoice generation.",
-    prompt: `
-You know how to use bitcoin connect on the frontend to make payments:
-
-<script type="module">
-  import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
-
-  const {setPaid} = launchPaymentModal({
-    invoice: 'lnbc...',
-    onPaid: (response) => {
-      clearInterval(checkPaymentInterval);
-      setTimeout(() => {
-        // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
-      }, 3000);
-    },
-    onCancelled: () => {
-      clearInterval(checkPaymentInterval);
-      alert('Payment cancelled');
-    },
-  });
-
-  const checkPaymentInterval = setInterval(async () => {
-    // here is an example using lightning tools, but any method can
-    // be used as long as it returns a preimage once the invoice is paid
-    // (e.g. a call to a backend which can check the invoice)
-
-    const paid = await invoice.verifyPayment();
-
-    if (paid && invoice.preimage) {
-      setPaid({
-        preimage: invoice.preimage,
-      });
-    }
-  }, 1000);
-
-</script>
-`,
-  },
-  {
-    name: "bitcoin connect (WebLN)",
-    environment: "frontend",
-    usecase:
-      "Connect to and interact with a wallet using WebLN (e.g. make or pay invoices)",
-    prompt: `
-You know how to use bitcoin connect on the frontend to connect to a wallet:
-
-<script type="module">
-  import {requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
-  const weblnProvider = await requestProvider();
-
-  // make an invoice for 2 sats
-  const {paymentRequest} = await weblnProvider.makeInvoice({amount: 2, defaultMemo: "Optional invoice description"})
-
-  // pay an invoice
-  const {preimage} = await weblnProvider.sendPayment('lnbc...');
-
-</script>
-`,
-  },
-  {
-    name: "lightning tools - parse invoice",
-    environment: "any",
-    usecase:
-      "parse a lightning invoice e.g. to check the amount of satoshis or read the description",
-    prompt: `
-You know how to use lightning tools to parse a BOLT11 lightning invoice:
-
-<script type="module">
-  import { Invoice } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
-
-  const {satoshi, description} = new Invoice({ pr: "lnbc..."});
-  
-</script>`,
-  },
-  {
-    name: "lightning tools - request invoice from lightning address",
-    environment: "frontend",
-    usecase:
-      "fetch a lightning invoice from a lightning address. Enabling this segment will allow the app developer to specify a lightning address to receive payments made by the user interacting with the app and can be used directly from the frontend. If you have a NWC connection to generate the invoice, use that instead",
-    prompt: `
-You know how to use lightning tools to generate a lightning invoice for a lightning address and check if it was paid:
-
-<script type="module">
-  import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
-
-  const ln = new LightningAddress("${process.env.DEFAULT_LIGHTNING_ADDRESS}");
-
-  await ln.fetch();
-  const invoice = await ln.requestInvoice({ satoshi: 21, comment: "Optional comment" });
-
-  // to check if it was paid:
-  const paid = await invoice.verifyPayment(); // returns boolean
-</script>`,
-  },
-  {
-    name: "NWC",
-    environment: "backend",
-    usecase:
-      "Connect to and interact with a wallet using NWC (e.g. make or pay invoices)",
-    prompt: `
-You know how to use Nostr Wallet Connect (NWC/NIP-47) to interact with a wallet from the backend.
-Please note NWC uses millisats unit (1 sat/satoshi = 1000 millisats). Here is how to use NWC:
-
-// DENO CODE START
-import {nwc} from "https://esm.sh/@getalby/sdk"
-
-const nwcClient = new nwc.NWCClient({
-  nostrWalletConnectUrl: Deno.env.get("NWC_URL"),
-});
-
-// pay invoice:
-const {
-  preimage
-} = await nwcClient.payInvoice({ invoice });
-
-// make invoice
-const {invoice} = await client.makeInvoice({
-  amount: 2000, // 2000 millisats = 2 sats
-  description: "Optional description"
-});
-
-// lookup invoice: (the returned preimage will be set if the invoice has been paid)
-const {preimage} = await client.lookupInvoice({
-  invoice,
-});
-
-// DENO CODE END
-`,
-  },
+  knowledgeBitcoinConnectPaymentDialog,
+  knowledgeBitcoinConnectWebln,
+  knowledgeLightningToolsParseInvoice,
+  knowledgeLightningToolsRequestInvoice,
+  knowledgeNWC,
+  knowledgeDeno,
 ] as const;
 
 export const buildSystemPrompt = (
@@ -143,9 +23,8 @@ ${segmentPrompts.join("\n\n")}
 Here are the rules you MUST follow:
 
 **General:**
-- Analyze the user's prompt carefully to determine if a backend is necessary. Simple UI-only apps should only have HTML. Unless payments need to be initiated from the backend, a backend most likely isn't needed.
 - Only output the code itself, without any explanations or surrounding text like "Here is the code:".
-- This is a one-shot prompt to create a REAL APP. Do not leave TODOs, or "demo code", or fake/random lightning invoices. You know how to create lightning invoices.
+- This is a one-shot prompt to create a REAL APP. Do not leave TODOs, or "demo code", or fake/random lightning invoices.
 
 **HTML Generation (Always Required):**
 - The HTML output MUST be a single file.
@@ -156,26 +35,7 @@ Here are the rules you MUST follow:
 - Prefix all API request paths with: /PROXY/
 - If the app needs to interact with the backend, the frontend JavaScript should make fetch requests to the appropriate backend endpoints (assume the backend runs on the same origin but requests will be proxied).
 
-**Deno Backend Generation (Optional):**
-- If a backend is required, generate a single Deno TypeScript file.
-- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT --allow-env=NWC_URL <filename>\`.
-- The NWC URL is only be set if you have knowledge of NWC (if so it will have already been provided further up in this prompt)
-- The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
-- Use the standard Deno HTTP server (\`Deno.serve\`).
-- If payments are required, use the NWC code mentioned above.
-- The HTTP server must only have api endpoints. It should not serve static HTML.
-- Keep the backend simple and focused on the prompt's requirements.
-
-- **Persistent Storage:** Your backend has access to a persistent JSON file for storing data between restarts.
-  - The path to this file is provided in the \`STORAGE_PATH\` environment variable.
-  - Read and write permissions (\`--allow-read\`, \`--allow-write\`) for this specific file path are automatically granted.
-  - Use \`Deno.env.get("STORAGE_PATH")\` to get the path.
-  - Use \`Deno.readTextFile\` and \`JSON.parse\` to read the data.
-  - Use \`JSON.stringify\` and \`Deno.writeTextFile\` to save the data.
-
 **Output Format:**
-- If ONLY HTML is generated, output just the HTML code.
-- If BOTH HTML and Deno code are generated, use the following format EXACTLY:
 
 <!-- HTML_START -->
 <!DOCTYPE html>
@@ -193,20 +53,10 @@ Here are the rules you MUST follow:
 <!-- HTML_END -->
 
 // DENO_START
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-// add other necessary imports here
-
-const port = parseInt(Deno.env.get("PORT") || "8000");
-
-serve((req: Request) => {
-  // Backend logic here
-  return new Response("Hello from Deno!");
-}, { port });
-
-console.log(\`Deno server running on port \${port}\`);
+// ...
 // DENO_END
 
-- Ensure the delimiters \`<!-- HTML_START -->\`, \`<!-- HTML_END -->\`, \`// DENO_START\`, and \`// DENO_END\` are present and correctly placed on their own lines when generating both files.
+- Ensure the delimiters \`<!-- HTML_START -->\`, \`<!-- HTML_END -->\`, \`// DENO_START\`, and \`// DENO_END\` are present and correctly placed on their own lines.
 `;
 
 type Recipe = {
@@ -229,6 +79,7 @@ export const optionalSystemPromptSegmentRecipes: Recipe[] = [
       "bitcoin connect (WebLN)",
       "NWC",
       "lightning tools - parse invoice",
+      "Deno backend",
     ],
   },
 ];
