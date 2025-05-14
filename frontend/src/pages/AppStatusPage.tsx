@@ -65,7 +65,8 @@ const POLLING_INTERVAL = 3000; // Poll every 3 seconds
 const AVAILABLE_MODELS = [
   "deepseek/deepseek-chat:free",
   "google/gemini-2.5-pro-preview",
-  "openai/gpt-4o-mini",
+  "openai/gpt-4.1",
+  "anthropic/claude-3.7-sonnet",
 ];
 
 function AppStatusPage() {
