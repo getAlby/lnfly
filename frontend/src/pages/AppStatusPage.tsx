@@ -67,6 +67,8 @@ const AVAILABLE_MODELS = [
   "google/gemini-2.5-pro-preview",
   "openai/gpt-4.1",
   "anthropic/claude-3.7-sonnet",
+  "meta-llama/llama-4-maverick",
+  "x-ai/grok-3-beta",
 ];
 
 function AppStatusPage() {
