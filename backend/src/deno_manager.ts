@@ -74,6 +74,17 @@ export class DenoManager {
     }
   }
 
+  async clearStorage(appId: number) {
+    const workDir = process.env.WORK_DIR || "."; // Use WORK_DIR or fallback to current dir
+    const storageDir = path.join(workDir, "apps", appId.toString());
+    const storagePath = path.join(storageDir, "storage.json");
+    try {
+      await fs.unlink(storagePath);
+    } catch (error) {
+      console.error("Failed to clear app storage", { appId, error });
+    }
+  }
+
   async startAppBackend(appId: number): Promise<void> {
     console.log(`Attempting to start backend for app ${appId}...`);
 

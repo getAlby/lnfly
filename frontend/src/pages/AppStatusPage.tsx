@@ -392,7 +392,9 @@ function AppStatusPage() {
   };
 
   // --- Backend Control Handlers ---
-  const handleBackendAction = async (action: "start" | "stop") => {
+  const handleBackendAction = async (
+    action: "start" | "stop" | "clear_storage"
+  ) => {
     if (!id || !editKey || !appData?.denoCode) {
       toast.error("Cannot perform backend action: Missing ID, key, or code.");
       return;
@@ -447,6 +449,7 @@ function AppStatusPage() {
 
   const handleStartBackend = () => handleBackendAction("start");
   const handleStopBackend = () => handleBackendAction("stop");
+  const handleClearBackendStorage = () => handleBackendAction("clear_storage");
   // --- End Backend Control Handlers ---
 
   const cancelGeneration = async () => {
@@ -1213,6 +1216,16 @@ function AppStatusPage() {
                   {isBackendLoading && appData.backendState === "STOPPING"
                     ? "Stopping..."
                     : "Stop Backend"}
+                </Button>
+                <Button
+                  onClick={handleClearBackendStorage}
+                  disabled={
+                    isBackendLoading || appData.backendState === "RUNNING"
+                  }
+                  size="sm"
+                  variant="secondary"
+                >
+                  Clear Storage
                 </Button>
               </div>
             </div>

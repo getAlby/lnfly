@@ -384,6 +384,9 @@ async function appRoutes(
       // Stop any potentially running backend for this app before regenerating
       await denoManager.stopAppBackend(appId);
 
+      // Clear storage as it might be out of date for the new prompt
+      await denoManager.clearStorage(appId);
+
       fastify.log.info(`App ${appId} regeneration requested with new prompt.`);
       reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
 
@@ -471,6 +474,46 @@ async function appRoutes(
   );
 
   // --- Backend Control Routes ---
+
+  // Route to clear storage
+  fastify.post<{ Params: { id: string }; Querystring: { editKey?: string } }>(
+    "/:id/backend/clear_storage",
+    async (request, reply) => {
+      const { id } = request.params;
+      const { editKey } = request.query;
+      const appId = parseInt(id, 10);
+
+      if (isNaN(appId)) {
+        return reply.code(400).send({ message: "Invalid App ID format." });
+      }
+      if (!editKey) {
+        return reply.code(401).send({ message: "Edit key is required." });
+      }
+
+      try {
+        const app = await prisma.app.findUnique({ where: { id: appId } });
+        if (!app) {
+          return reply.code(404).send({ message: "App not found." });
+        }
+        if (editKey !== app.editKey) {
+          return reply.code(403).send({ message: "Invalid edit key." });
+        }
+        if (!app.denoCode) {
+          return reply.code(400).send({ message: "App has no backend code." });
+        }
+
+        await denoManager.clearStorage(appId);
+
+        return reply.send({ message: "Storage cleared successfully" });
+      } catch (error) {
+        fastify.log.error(
+          error,
+          `Failed to clear storage for app ID: ${appId}`
+        );
+        return reply.code(500).send({ message: "Internal Server Error." });
+      }
+    }
+  );
 
   // Route to start the Deno backend
   fastify.post<{ Params: { id: string }; Querystring: { editKey?: string } }>(
@@ -648,6 +691,15 @@ async function appRoutes(
         // Forward the request using reply.from
         // It automatically handles method, headers, query string, and body
         return reply.from(targetUrl, {
+          // Add headers to prevent caching
+          rewriteRequestHeaders: (req, headers) => {
+            return {
+              ...headers,
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
+              Expires: "0",
+            };
+          },
           // Optional: Handle potential errors during proxying
           onError: (reply, error) => {
             fastify.log.error(
