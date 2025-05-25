@@ -29,6 +29,9 @@ const {preimage} = await client.lookupInvoice({
 invoice,
 });
 
+// get balance (in millisats)
+const {balance} = await client.getBalance();
+
 // list transactions
 
 const {transactions} = await client.listTransactions({
