@@ -95,7 +95,8 @@ export const executePrompt = (
   prompt: string,
   systemPrompt: string,
   seed: number,
-  modelName: string | undefined
+  modelName: string | undefined,
+  abortSignal?: AbortSignal // Add AbortSignal parameter
 ): AsyncIterable<string> => {
   console.log(`Streaming from ${modelName} for prompt:`, prompt);
   const selectedChatModel = getChatModel(modelName);
@@ -112,6 +113,7 @@ export const executePrompt = (
       system: systemPrompt,
       seed,
       prompt,
+      abortSignal, // Pass AbortSignal
       onError: (event) => {
         throw new Error(
           "got an error while generating: " +

@@ -22,6 +22,8 @@ interface AppRoutesOptions extends FastifyPluginOptions {
   denoManager: DenoManager; // Add denoManager
 }
 
+const activeGenerations = new Map<number, AbortController>(); // Map to store active AbortControllers
+
 async function appRoutes(
   fastify: FastifyInstance,
   options: AppRoutesOptions // Use updated options type
@@ -134,8 +136,17 @@ async function appRoutes(
         reply.code(202).send(app); // 202 Accepted
 
         // 3. Start generation in the background (fire and forget)
+        const controller = new AbortController();
+        activeGenerations.set(app.id, controller);
         // We don't await this promise
-        executePromptAndUpdateDb(fastify, prisma, app.id, prompt, undefined);
+        executePromptAndUpdateDb(
+          fastify,
+          prisma,
+          app.id,
+          prompt,
+          undefined,
+          controller.signal
+        );
       } catch (error) {
         fastify.log.error(
           error,
@@ -279,6 +290,17 @@ async function appRoutes(
         return reply.code(403).send({ message: "Invalid edit key." });
       }
 
+      if (state === AppState.FAILED) {
+        const controller = activeGenerations.get(appId);
+        if (controller) {
+          fastify.log.info(
+            `Cancelling active generation for app ${appId} via PUT request.`
+          );
+          controller.abort();
+          activeGenerations.delete(appId); // Clean up controller
+        }
+      }
+
       // Update the app with the provided data
       const updatedApp = await prisma.app.update({
         where: { id: appId },
@@ -399,7 +421,16 @@ async function appRoutes(
       reply.code(202).send({ message: "App regeneration started." }); // 202 Accepted
 
       // Start generation in the background (fire and forget)
-      executePromptAndUpdateDb(fastify, prisma, appId, prompt, model); // Pass model
+      const controller = new AbortController();
+      activeGenerations.set(appId, controller);
+      executePromptAndUpdateDb(
+        fastify,
+        prisma,
+        appId,
+        prompt,
+        model,
+        controller.signal
+      ); // Pass model and signal
     } catch (error) {
       fastify.log.error(error, `Failed to regenerate app for ID: ${appId}`);
       if (!reply.sent) {
@@ -1005,7 +1036,8 @@ async function executePromptAndUpdateDb(
   prisma: PrismaClient,
   appId: number,
   prompt: string,
-  model: string | undefined // Add model parameter
+  model: string | undefined, // Add model parameter
+  abortSignal: AbortSignal // Add AbortSignal parameter
 ) {
   let fullOutput = ""; // Store the full AI output
   let generatedHtml: string | null = null;
@@ -1016,6 +1048,21 @@ async function executePromptAndUpdateDb(
   const seed = Math.floor(Math.random() * 21_000_000);
 
   try {
+    if (abortSignal.aborted) {
+      fastify.log.info(
+        `Generation for app ${appId} cancelled before starting.`
+      );
+      // Ensure state is FAILED if aborted.
+      await prisma.app.update({
+        where: { id: appId },
+        data: {
+          state: AppState.FAILED,
+          errorMessage: "Generation cancelled by user.",
+        },
+      });
+      return;
+    }
+
     // based on the prompt we give it specific knowledge
     const { systemPrompt, segmentNames } = await generateSystemPrompt(
       prompt,
@@ -1033,11 +1080,38 @@ async function executePromptAndUpdateDb(
     });
 
     // Get the stream from the updated executePrompt
-    const outputStream = executePrompt(prompt, systemPrompt, seed, model); // Pass model to executePrompt
+    const outputStream = executePrompt(
+      prompt,
+      systemPrompt,
+      seed,
+      model,
+      abortSignal
+    ); // Pass model and abortSignal
 
     let currentLine = "";
     // Process the stream chunk by chunk
     for await (const chunk of outputStream) {
+      if (abortSignal.aborted) {
+        fastify.log.info(
+          `Generation for app ${appId} was cancelled during streaming.`
+        );
+        // The state might have been set by the PUT route, or we set it here.
+        const app = await prisma.app.findUnique({
+          where: { id: appId },
+          select: { state: true },
+        });
+        if (app && app.state !== AppState.FAILED) {
+          await prisma.app.update({
+            where: { id: appId },
+            data: {
+              state: AppState.FAILED,
+              errorMessage: "Generation cancelled by user.",
+            },
+          });
+        }
+        return; // Exit the function
+      }
+
       if (generatedCharsCount === 0) {
         // Mark as GENERATING once we get first chunk back
         await prisma.app.update({
@@ -1088,6 +1162,26 @@ async function executePromptAndUpdateDb(
           );
         }
       }
+    }
+
+    if (abortSignal.aborted) {
+      fastify.log.info(
+        `Generation for app ${appId} was cancelled after streaming finished but before final processing.`
+      );
+      const app = await prisma.app.findUnique({
+        where: { id: appId },
+        select: { state: true },
+      });
+      if (app && app.state !== AppState.FAILED) {
+        await prisma.app.update({
+          where: { id: appId },
+          data: {
+            state: AppState.FAILED,
+            errorMessage: "Generation cancelled by user.",
+          },
+        });
+      }
+      return;
     }
 
     // --- Parse the full output ---
@@ -1175,27 +1269,58 @@ async function executePromptAndUpdateDb(
       });*/
     }
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    fastify.log.error(error, `Failed generation for app ID: ${appId}`);
-    // Update DB on failure
-    try {
-      await prisma.app.update({
-        where: { id: appId },
-        // Keep potentially partially generated numChars when failing
-        data: {
-          state: AppState.FAILED,
-          errorMessage: errorMessage.substring(0, 1000), // Store error message (truncated if needed)
-        },
-      });
+    // Check if cancellation was the cause
+    if (abortSignal.aborted) {
       fastify.log.info(
-        `App ${appId} state changed to FAILED. Error: ${errorMessage}`
+        `Generation for app ${appId} was aborted, error caught: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
-    } catch (dbError) {
-      fastify.log.error(
-        dbError,
-        `Failed to update app ${appId} state to FAILED after generation error.`
-      );
+      // State should have been set to FAILED already by the abort check or the PUT route.
+      // If not, set it here.
+      const app = await prisma.app.findUnique({
+        where: { id: appId },
+        select: { state: true },
+      });
+      if (app && app.state !== AppState.FAILED) {
+        await prisma.app.update({
+          where: { id: appId },
+          data: {
+            state: AppState.FAILED,
+            errorMessage: "Generation cancelled by user.",
+          },
+        });
+      }
+    } else {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      fastify.log.error(error, `Failed generation for app ID: ${appId}`);
+      // Update DB on failure
+      try {
+        await prisma.app.update({
+          where: { id: appId },
+          // Keep potentially partially generated numChars when failing
+          data: {
+            state: AppState.FAILED,
+            errorMessage: errorMessage.substring(0, 1000), // Store error message (truncated if needed)
+          },
+        });
+        fastify.log.info(
+          `App ${appId} state changed to FAILED. Error: ${errorMessage}`
+        );
+      } catch (dbError) {
+        fastify.log.error(
+          dbError,
+          `Failed to update app ${appId} state to FAILED after generation error.`
+        );
+      }
     }
+  } finally {
+    // Always remove the controller from the map when generation finishes or is aborted
+    activeGenerations.delete(appId);
+    fastify.log.info(
+      `Removed AbortController for app ${appId} from activeGenerations.`
+    );
   }
 }
 
