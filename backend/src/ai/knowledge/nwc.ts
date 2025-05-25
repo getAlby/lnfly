@@ -29,6 +29,28 @@ const {preimage} = await client.lookupInvoice({
 invoice,
 });
 
+// list transactions
+
+const {transactions} = await client.listTransactions({
+  limit: 10,
+  offset: 0, // can increase this for pagination
+});
+
+// transactions is an array of:
+/* {
+  "type": "incoming", // "incoming" for invoices, "outgoing" for payments
+  "invoice": "string", // encoded invoice, optional
+  "description": "string", // invoice's description, optional
+  "description_hash": "string", // invoice's description hash, optional
+  "preimage": "string", // payment's preimage, optional if unpaid
+  "payment_hash": "string", // Payment hash for the payment
+  "amount": 123, // value in msats
+  "fees_paid": 123, // value in msats
+  "created_at": unixtimestamp, // invoice/payment creation time
+  "expires_at": unixtimestamp, // invoice expiration time, optional if not applicable
+  "settled_at": unixtimestamp, // invoice/payment settlement time, optional if unpaid
+  "metadata": {} // generic metadata that can be used to add things like zap/boostagram details for a payer name/comment/etc.
+}*/
 
 `,
 } as const;
