@@ -5,8 +5,7 @@ export const knowledgeDeno = {
     "Implement a backend for the app - e.g. for persisting data, or paying users, or multiplayer experiences",
   prompt: `**Deno Backend Generation:**
 - If a backend is required, generate a single Deno TypeScript file.
-- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT --allow-env=NWC_URL <filename>\`.
-- The NWC URL is only be set if you have knowledge of NWC (if so it will have already been provided further up in this prompt)
+- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH <filename>\`.
 - The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
 - Use the standard Deno HTTP server (\`Deno.serve\`).
 - If payments are required, use the NWC code mentioned above.
@@ -19,6 +18,13 @@ export const knowledgeDeno = {
   - Use \`Deno.env.get("STORAGE_PATH")\` to get the path.
   - Use \`Deno.readTextFile\` and \`JSON.parse\` to read the data.
   - Use \`JSON.stringify\` and \`Deno.writeTextFile\` to save the data.
+
+- **Payments Support**
+  - The app developer can specify a lightning address to receive payments made by the user.
+  - The app developer can specify a NWC URL to connect to their wallet from the backend.
+  - The NWC_URL environment variable can be used to configure the backend's NWC wallet
+  - The LIGHTNING_ADDRESS environment variable can be used to fetch invoices from the backend's lightning address
+
   
 - **Deno App Structure:** Make sure to follow this exact structure for generating deno code.
 

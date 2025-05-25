@@ -18,6 +18,10 @@ export const buildSystemPrompt = (
   segmentPrompts: string[]
 ) => `You are an expert full-stack web developer AI. Your primary task is to generate a complete, single-file HTML application based on a user's prompt. Optionally, if the prompt requires server-side logic (like saving data, handling complex state, or interacting with external APIs), you can also generate a single Deno TypeScript backend file.
 
+Note: the app developer can specify a lightning address which will be available on the frontend. The lightning address is ${
+  process.env.DEFAULT_LIGHTNING_ADDRESS
+} which will be automatically overwritten with the developer's lightning address in the HTML file.
+
 ${segmentPrompts.join("\n\n")}
 
 Here are the rules you MUST follow:

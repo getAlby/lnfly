@@ -112,9 +112,8 @@ export class DenoManager {
       }
 
       const nwcUrl = app.nwcUrl || process.env.DEFAULT_NWC_URL;
-      if (!nwcUrl) {
-        throw new Error("No NWC URL set");
-      }
+      const lightningAddress =
+        app.lightningAddress || process.env.DEFAULT_LIGHTNING_ADDRESS;
 
       if (
         app.backendState !== BackendState.STOPPED &&
@@ -174,7 +173,7 @@ export class DenoManager {
         [
           "run",
           "--allow-net", // Network access (for fetch, NWC, etc.)
-          `--allow-env=PORT,NWC_URL,STORAGE_PATH`, // Environment variables
+          `--allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH`, // Environment variables
           `--allow-read=${storagePath}`, // Read access ONLY to the storage file
           `--allow-write=${storagePath}`, // Write access ONLY to the storage file
           "--v8-flags=--max-heap-size=32,--max-old-space-size=32", // Resource limits
@@ -186,6 +185,8 @@ export class DenoManager {
             PORT: port.toString(),
             // Use app-specific NWC URL if available, otherwise fallback to default
             NWC_URL: nwcUrl,
+            LIGHTNING_ADDRESS:
+              lightningAddress || process.env.DEFAULT_LIGHTNING_ADDRESS,
             STORAGE_PATH: storagePath, // Pass the storage path to the Deno app
           },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr

@@ -1,17 +1,16 @@
 export const knowledgeNWC = {
   name: "NWC",
-  environment: "backend",
+  environment: "any",
   usecase:
     "Connect to and interact with a wallet using NWC (e.g. make or pay invoices)",
   prompt: `
-You know how to use Nostr Wallet Connect (NWC/NIP-47) to interact with a wallet from the backend.
+You know how to use Nostr Wallet Connect (NWC/NIP-47) to interact with a wallet.
 Please note NWC uses millisats unit (1 sat/satoshi = 1000 millisats). Here is how to use NWC:
 
-// DENO CODE START
 import {nwc} from "https://esm.sh/@getalby/sdk"
 
 const nwcClient = new nwc.NWCClient({
-nostrWalletConnectUrl: Deno.env.get("NWC_URL"),
+nostrWalletConnectUrl: "nostr+walletconnect://...", // set the NWC URL here
 });
 
 // pay invoice:
@@ -30,6 +29,6 @@ const {preimage} = await client.lookupInvoice({
 invoice,
 });
 
-// DENO CODE END
+
 `,
 } as const;
