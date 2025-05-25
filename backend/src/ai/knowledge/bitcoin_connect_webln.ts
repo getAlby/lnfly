@@ -7,7 +7,13 @@ export const knowledgeBitcoinConnectWebln = {
 You know how to use bitcoin connect on the frontend to connect to a wallet:
 
 <script type="module">
-import {requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
+import {init, requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
+
+// Initialize Bitcoin Connect
+init({
+  appName: 'My Lightning App', // your app name
+});
+
 const weblnProvider = await requestProvider();
 
 // make an invoice for 2 sats

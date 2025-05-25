@@ -1,3 +1,4 @@
+import { knowledgeBitcoinConnectNWC } from "./knowledge/bitcoin_connect_nwc";
 import { knowledgeBitcoinConnectPaymentDialog } from "./knowledge/bitcoin_connect_payment_dialog";
 import { knowledgeBitcoinConnectWebln } from "./knowledge/bitcoin_connect_webln";
 import { knowledgeDeno } from "./knowledge/deno";
@@ -12,6 +13,7 @@ export const optionalSystemPromptSegments = [
   knowledgeLightningToolsRequestInvoice,
   knowledgeNWC,
   knowledgeDeno,
+  knowledgeBitcoinConnectNWC,
 ] as const;
 
 export const buildSystemPrompt = (
