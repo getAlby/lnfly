@@ -7,7 +7,7 @@ export const knowledgeLightningToolsParseInvoice = {
 You know how to use lightning tools to parse a BOLT11 lightning invoice:
 
 <script type="module">
-import { Invoice } from "https://esm.sh/@getalby/lightning-tools@5.0.0";
+import { Invoice } from "https://esm.sh/@getalby/lightning-tools";
 
 const {satoshi, description} = new Invoice({ pr: "lnbc..."});
 

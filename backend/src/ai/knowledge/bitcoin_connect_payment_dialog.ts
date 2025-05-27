@@ -7,7 +7,7 @@ export const knowledgeBitcoinConnectPaymentDialog = {
 You know how to use bitcoin connect on the frontend to make payments:
 
 <script type="module">
-import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
+import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect';
 
 const {setPaid} = launchPaymentModal({
   invoice: 'lnbc...',

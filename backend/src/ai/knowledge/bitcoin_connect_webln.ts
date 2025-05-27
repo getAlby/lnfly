@@ -7,7 +7,7 @@ export const knowledgeBitcoinConnectWebln = {
 You know how to use bitcoin connect on the frontend to connect to a wallet:
 
 <script type="module">
-import {init, requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect@3.8.0';
+import {init, requestProvider} from 'https://esm.sh/@getalby/bitcoin-connect';
 
 // Initialize Bitcoin Connect
 init({
