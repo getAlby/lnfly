@@ -16,6 +16,10 @@ LNFly has limited knowledge of some lightning tools to enable your generated app
 - Lightning tools (Request invoice from lightning address, verify invoice)
 - NWC (Make invoice, lookup invoice, pay invoice)
 
+## Supported Nostr functionality
+
+- Signing & posting notes
+
 ## How it works
 
 LNFly focuses on simplicity - 1 html file for frontend, and if needed, 1 deno file for the backend.
@@ -46,8 +50,9 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] Update dockerfile to add fly
 - [x] Basic data storage for backend apps
 - [x] Pay to upvote/downvote apps on homepage
+- [x] [Nostr Tools] Posting notes
+- [ ] PPQ.ai knowledge
 - [ ] User accounts
-- [ ] Nostr knowledge
 
 ## Development
 
