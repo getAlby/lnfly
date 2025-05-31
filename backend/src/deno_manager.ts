@@ -115,6 +115,7 @@ export class DenoManager {
       const lightningAddress =
         app.lightningAddress || process.env.DEFAULT_LIGHTNING_ADDRESS;
       const nsec = app.nsec || undefined;
+      const ppqApiKey = app.ppqApiKey || process.env.DEFAULT_PPQ_API_KEY;
 
       if (
         app.backendState !== BackendState.STOPPED &&
@@ -174,7 +175,7 @@ export class DenoManager {
         [
           "run",
           "--allow-net", // Network access (for fetch, NWC, etc.)
-          `--allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH,NSEC`, // Environment variables
+          `--allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH,NSEC,PPQ_API_KEY`, // Environment variables
           `--allow-read=${storagePath}`, // Read access ONLY to the storage file
           `--allow-write=${storagePath}`, // Write access ONLY to the storage file
           "--v8-flags=--max-heap-size=32,--max-old-space-size=32", // Resource limits
@@ -190,6 +191,7 @@ export class DenoManager {
               lightningAddress || process.env.DEFAULT_LIGHTNING_ADDRESS,
             STORAGE_PATH: storagePath, // Pass the storage path to the Deno app
             NSEC: nsec,
+            PPQ_API_KEY: ppqApiKey,
           },
           stdio: ["ignore", "pipe", "pipe"], // Pipe stdout/stderr
         }

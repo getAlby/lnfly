@@ -5,7 +5,7 @@ export const knowledgeDeno = {
     "Implement a backend for the app - e.g. for persisting data, or paying users, or multiplayer experiences",
   prompt: `**Deno Backend Generation:**
 - If a backend is required, generate a single Deno TypeScript file.
-- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH,NSEC <filename>\`.
+- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH,NSEC,PPQ_API_KEY <filename>\`.
 - The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
 - Use the standard Deno HTTP server (\`Deno.serve\`).
 - If payments are required, use the NWC code mentioned above.
@@ -27,7 +27,11 @@ export const knowledgeDeno = {
 
 - **Nostr Support**
   - The app developer can specify a nostr private key (nsec) to sign notes.
-  - The NSEC environment variable can be used to use the app developer's nsec.
+  - The NSEC environment variable will be set to the app developer's nsec.
+
+- **AI Support:** Your backend has access to an endpoint to do AI prompts.
+  - The app developer can specify an openAI-compatible API key to prompt an AI.
+  - The PPQ_API_KEY environment variable will be set to the app developer's openAI-compatible API key.
   
 - **Deno App Structure:** Make sure to follow this exact structure for generating deno code.
 

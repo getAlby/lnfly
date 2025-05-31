@@ -202,6 +202,7 @@ async function appRoutes(
                 systemPrompt: app.systemPrompt,
                 nwcUrl: app.nwcUrl,
                 nsec: app.nsec,
+                ppqApiKey: app.ppqApiKey,
                 fullOutput: app.fullOutput,
               }
             : {}),
@@ -237,6 +238,7 @@ async function appRoutes(
     lightningAddress?: string;
     nwcUrl?: string; // Add nwcUrl field
     nsec?: string; // Add nsec field
+    ppqApiKey?: string;
     title?: string;
     state?: AppState; // Add state field
     errorMessage?: string | null; // Add errorMessage field
@@ -255,6 +257,7 @@ async function appRoutes(
       lightningAddress,
       nwcUrl,
       nsec,
+      ppqApiKey,
       title,
       state,
       errorMessage,
@@ -273,8 +276,9 @@ async function appRoutes(
     if (
       published === undefined &&
       lightningAddress === undefined &&
-      nwcUrl === undefined && // Check nwcUrl
-      nsec === undefined && // Check nsec
+      nwcUrl === undefined &&
+      nsec === undefined &&
+      ppqApiKey === undefined &&
       title === undefined &&
       state === undefined &&
       errorMessage === undefined
@@ -320,6 +324,7 @@ async function appRoutes(
           lightningAddress,
           nwcUrl, // Add nwcUrl to update data
           nsec, // Add nsec to update data
+          ppqApiKey,
           title,
           state,
           errorMessage,
@@ -330,6 +335,7 @@ async function appRoutes(
           lightningAddress: true,
           nwcUrl: true, // Select updated nwcUrl
           nsec: true, // Select updated nsec
+          ppqApiKey: true,
           title: true,
           state: true, // Select updated state
           errorMessage: true, // Select updated error message

@@ -1,3 +1,4 @@
+import { knowledgeAI } from "./knowledge/ai";
 import { knowledgeBitcoinConnectNWC } from "./knowledge/bitcoin_connect_nwc";
 import { knowledgeBitcoinConnectPaymentDialog } from "./knowledge/bitcoin_connect_payment_dialog";
 import { knowledgeBitcoinConnectWebln } from "./knowledge/bitcoin_connect_webln";
@@ -16,6 +17,7 @@ export const optionalSystemPromptSegments = [
   knowledgeDeno,
   knowledgeBitcoinConnectNWC,
   knowledgeNostrToolsPostNote,
+  knowledgeAI,
 ] as const;
 
 export const buildSystemPrompt = (

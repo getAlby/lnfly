@@ -25,6 +25,7 @@ model App {
   lightningAddress String?
   nwcUrl           String?
   nsec             String?
+  ppqApiKey        String?
   editKey String @default(uuid())
   previewKey String @default(uuid())
   errorMessage String? // Add field to store error messages
