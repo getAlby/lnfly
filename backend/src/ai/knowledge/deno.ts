@@ -5,7 +5,7 @@ export const knowledgeDeno = {
     "Implement a backend for the app - e.g. for persisting data, or paying users, or multiplayer experiences",
   prompt: `**Deno Backend Generation:**
 - If a backend is required, generate a single Deno TypeScript file.
-- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH <filename>\`.
+- The Deno code MUST be runnable using \`deno run --allow-net --allow-env=PORT,NWC_URL,LIGHTNING_ADDRESS,STORAGE_PATH,NSEC <filename>\`.
 - The Deno server MUST listen on the port specified by the \`PORT\` environment variable. Example: \`const port = parseInt(Deno.env.get("PORT") || "8000");\`
 - Use the standard Deno HTTP server (\`Deno.serve\`).
 - If payments are required, use the NWC code mentioned above.
@@ -25,6 +25,9 @@ export const knowledgeDeno = {
   - The NWC_URL environment variable can be used to configure the backend's NWC wallet
   - The LIGHTNING_ADDRESS environment variable can be used to fetch invoices from the backend's lightning address
 
+- **Nostr Support**
+  - The app developer can specify a nostr private key (nsec) to sign notes.
+  - The NSEC environment variable can be used to use the app developer's nsec.
   
 - **Deno App Structure:** Make sure to follow this exact structure for generating deno code.
 

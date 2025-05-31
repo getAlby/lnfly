@@ -24,6 +24,7 @@ model App {
   published Boolean @default(false)
   lightningAddress String?
   nwcUrl           String?
+  nsec             String?
   editKey String @default(uuid())
   previewKey String @default(uuid())
   errorMessage String? // Add field to store error messages

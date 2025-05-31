@@ -201,6 +201,7 @@ async function appRoutes(
                 generatingSection: app.generatingSection,
                 systemPrompt: app.systemPrompt,
                 nwcUrl: app.nwcUrl,
+                nsec: app.nsec,
                 fullOutput: app.fullOutput,
               }
             : {}),
@@ -235,6 +236,7 @@ async function appRoutes(
     published?: boolean;
     lightningAddress?: string;
     nwcUrl?: string; // Add nwcUrl field
+    nsec?: string; // Add nsec field
     title?: string;
     state?: AppState; // Add state field
     errorMessage?: string | null; // Add errorMessage field
@@ -248,8 +250,15 @@ async function appRoutes(
   }>("/:id", async (request, reply) => {
     const { id } = request.params;
     const { editKey } = request.query;
-    const { published, lightningAddress, nwcUrl, title, state, errorMessage } =
-      request.body; // Extract nwcUrl // Extract new fields
+    const {
+      published,
+      lightningAddress,
+      nwcUrl,
+      nsec,
+      title,
+      state,
+      errorMessage,
+    } = request.body;
     const appId = parseInt(id, 10);
 
     if (isNaN(appId)) {
@@ -265,6 +274,7 @@ async function appRoutes(
       published === undefined &&
       lightningAddress === undefined &&
       nwcUrl === undefined && // Check nwcUrl
+      nsec === undefined && // Check nsec
       title === undefined &&
       state === undefined &&
       errorMessage === undefined
@@ -309,6 +319,7 @@ async function appRoutes(
           published,
           lightningAddress,
           nwcUrl, // Add nwcUrl to update data
+          nsec, // Add nsec to update data
           title,
           state,
           errorMessage,
@@ -318,6 +329,7 @@ async function appRoutes(
           published: true,
           lightningAddress: true,
           nwcUrl: true, // Select updated nwcUrl
+          nsec: true, // Select updated nsec
           title: true,
           state: true, // Select updated state
           errorMessage: true, // Select updated error message

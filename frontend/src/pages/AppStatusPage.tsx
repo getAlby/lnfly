@@ -49,6 +49,7 @@ interface AppData {
   published: boolean;
   lightningAddress?: string | null;
   nwcUrl?: string | null; // Add nwcUrl field
+  nsec?: string | null; // Add nsec field
   // Backend related fields (only present if editKey matches)
   denoCode?: string | null;
   backendState?: BackendState | null;
@@ -80,9 +81,11 @@ function AppStatusPage() {
   const [promptText, setPromptText] = useState("");
   const [lightningAddress, setLightningAddress] = useState("");
   const [nwcUrl, setNwcUrl] = useState(""); // Add state for NWC URL
+  const [nsec, setNsec] = useState(""); // Add state for nsec
   const [showLightningAddressModal, setShowLightningAddressModal] =
     useState(false);
   const [showNWCModal, setShowNWCModal] = useState(false);
+  const [showNsecModal, setShowNsecModal] = useState(false);
   const [showSuggestionsModal, setShowSuggestionsModal] = useState(false);
   const [showSystemPromptModal, setShowSystemPromptModal] = useState(false); // State for System Prompt modal
   const [showFullOutputModal, setShowFullOutputModal] = useState(false); // State for System Prompt modal
@@ -237,6 +240,48 @@ function AppStatusPage() {
     }
   };
 
+  const saveNsec = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot set nsec: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+    // Basic validation (optional: add more robust validation)
+    if (!nsec || !nsec.startsWith("nsec1")) {
+      alert("Please enter a valid nsec (e.g., nsec1...).");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ nsec }), // Send nsec
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to set nsec: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      toast(`Nsec updated successfully.`);
+      fetchStatus();
+    } catch (error) {
+      console.error("Error setting nsec:", error);
+      alert(
+        `Error setting nsec: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
   const openRegenerateModal = () => {
     if (!appData) return;
     if (appData.published) {
@@ -342,6 +387,9 @@ function AppStatusPage() {
         if (!nwcUrl) {
           setNwcUrl(data.nwcUrl || ""); // Initialize NWC URL input
         }
+        if (!nsec) {
+          setNsec(data.nsec || ""); // Initialize nsec input
+        }
         if (data.model && isInitialLoad) {
           setSelectedModel(data.model);
         }
@@ -380,8 +428,9 @@ function AppStatusPage() {
       isLoading,
       lightningAddress,
       nwcUrl,
+      nsec,
       promptText,
-    ] // Add nwcUrl dependency
+    ]
   );
 
   const saveAppTitle = async () => {
@@ -893,11 +942,43 @@ function AppStatusPage() {
               )}
               {/* End NWC URL Input */}
 
+              {/* Nsec Input - Added */}
+              {editKey && appData.denoCode?.includes("NSEC") && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center">
+                    <Label htmlFor="nsec" className="block">
+                      Nostr Private Key (nsec)
+                      <span className="text-destructive font-bold inline">
+                        *
+                      </span>
+                    </Label>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setShowNsecModal(true)}
+                    >
+                      <InfoIcon className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="nsec"
+                      placeholder="nsec1..."
+                      value={nsec}
+                      onChange={(e) => setNsec(e.target.value)}
+                    />
+                    <Button onClick={saveNsec}>Set</Button>
+                  </div>
+                </div>
+              )}
+              {/* End Nsec Input */}
+
               {(appData.state === "COMPLETED" ||
                 appData.state === "REVIEWING") &&
                 (appData.nwcUrl ||
-                  !appData.denoCode ||
-                  import.meta.env.VITE_ALLOW_EMPTY_NWC_URL === "true") && (
+                  !appData.denoCode?.includes("NWC_URL") ||
+                  import.meta.env.VITE_ALLOW_EMPTY_NWC_URL === "true") &&
+                (appData.nsec || !appData.denoCode?.includes("NSEC")) && (
                   <a
                     href={
                       buttonDisabled
@@ -922,8 +1003,9 @@ function AppStatusPage() {
               {!appData.published &&
                 appData.state === "COMPLETED" &&
                 (appData.nwcUrl ||
-                  !appData.denoCode ||
+                  !appData.denoCode?.includes("NWC_URL") ||
                   import.meta.env.VITE_ALLOW_EMPTY_NWC_URL === "true") &&
+                (appData.nsec || !appData.denoCode?.includes("NSEC")) &&
                 editKey && (
                   <Button
                     variant="secondary"
@@ -1028,6 +1110,46 @@ function AppStatusPage() {
               </li>
             </ul>
             <Button onClick={() => setShowNWCModal(false)} className="w-full">
+              Close
+            </Button>
+          </div>
+        </div>
+      )}
+      {showNsecModal && (
+        <div className="fixed inset-0 backdrop-blur-md flex items-center justify-center z-50">
+          <div className="bg-primary-foreground p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-bold mb-4">
+              What is a Nostr Private Key (nsec)?
+            </h3>
+            <p className="mb-4">
+              A Nostr private key (nsec) allows your app to post notes and
+              interact with the Nostr network on your behalf. Your Deno backend
+              needs an nsec to function with Nostr features. You can generate
+              one at:
+            </p>
+            <ul className="list-disc list-inside mb-4">
+              <li>
+                <a
+                  href="https://nostrtool.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://nostrtool.com
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://getalby.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  https://getalby.com
+                </a>
+              </li>
+            </ul>
+            <Button onClick={() => setShowNsecModal(false)} className="w-full">
               Close
             </Button>
           </div>

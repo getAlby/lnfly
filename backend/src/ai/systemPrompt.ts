@@ -4,6 +4,7 @@ import { knowledgeBitcoinConnectWebln } from "./knowledge/bitcoin_connect_webln"
 import { knowledgeDeno } from "./knowledge/deno";
 import { knowledgeLightningToolsParseInvoice } from "./knowledge/lightning_tools_parse_invoice";
 import { knowledgeLightningToolsRequestInvoice } from "./knowledge/lightning_tools_request_invoice";
+import { knowledgeNostrToolsPostNote } from "./knowledge/nostr_tools_post_note";
 import { knowledgeNWC } from "./knowledge/nwc";
 
 export const optionalSystemPromptSegments = [
@@ -14,6 +15,7 @@ export const optionalSystemPromptSegments = [
   knowledgeNWC,
   knowledgeDeno,
   knowledgeBitcoinConnectNWC,
+  knowledgeNostrToolsPostNote,
 ] as const;
 
 export const buildSystemPrompt = (
