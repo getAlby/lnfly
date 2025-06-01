@@ -6,6 +6,8 @@ When a tickets are purchased, the time should increase by max(600 - total number
 
 If less than two tickets have been purchased, the timer should not start.
 
+When the game is started, the timer should start following the above rules. Do not add any additional time when starting a brand new game.
+
 TICKET PURCHASING
 
 On the homepage there should be a single "Buy ticket (210 sats)" button. When clicked it should open a modal showing:
@@ -50,7 +52,7 @@ The app version should be shown on the page next to the title, but in a much sma
 
 The app description should be shown under the title: "Lightning Lottery - 210 sats per ticket" and "each ticket purchased increases countdown timer" (both on separate lines, second line smaller text. Include a relevant emoji in front of each sentence)
 
-The countdown timer should show on the main page. IMPORTANT: it must re-render every second showing a smooth countdown. The numbers should animate like a flip clock / rotating cube clock.
+The countdown timer should show on the main page. IMPORTANT: it must re-render every second showing a smooth countdown.
 
 The amount of PAID tickets and the prize pool should show on the main page.
 

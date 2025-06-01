@@ -1466,7 +1466,7 @@ function AppStatusPage() {
                   <span> (Port: {appData.backendPort})</span>
                 )}
               </p>
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2 mt-2 flex-wrap">
                 <Button
                   onClick={handleStartBackend}
                   disabled={
