@@ -334,7 +334,7 @@ export class DenoManager {
     }
   }
 
-  async stopAppBackend(appId: number, force: boolean): Promise<void> {
+  async stopAppBackend(appId: number, force?: boolean): Promise<void> {
     const appInfo = this.runningApps.get(appId);
     console.log(`Attempting to stop backend for app ${appId}...`);
 
