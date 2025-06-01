@@ -620,45 +620,45 @@ async function appRoutes(
   );
 
   // Route to stop the Deno backend
-  fastify.post<{ Params: { id: string }; Querystring: { editKey?: string } }>(
-    "/:id/backend/stop",
-    async (request, reply) => {
-      const { id } = request.params;
-      const { editKey } = request.query;
-      const appId = parseInt(id, 10);
+  fastify.post<{
+    Params: { id: string };
+    Querystring: { editKey?: string; force?: string };
+  }>("/:id/backend/stop", async (request, reply) => {
+    const { id } = request.params;
+    const { editKey, force } = request.query;
+    const appId = parseInt(id, 10);
 
-      if (isNaN(appId)) {
-        return reply.code(400).send({ message: "Invalid App ID format." });
-      }
-      if (!editKey) {
-        return reply.code(401).send({ message: "Edit key is required." });
-      }
-
-      try {
-        const app = await prisma.app.findUnique({ where: { id: appId } });
-        if (!app) {
-          return reply.code(404).send({ message: "App not found." });
-        }
-        if (editKey !== app.editKey) {
-          return reply.code(403).send({ message: "Invalid edit key." });
-        }
-
-        // Call manager to stop (non-blocking)
-        denoManager.stopAppBackend(appId);
-
-        // Give it a moment to potentially update state, then fetch latest
-        await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay
-        const updatedApp = await prisma.app.findUnique({
-          where: { id: appId },
-        });
-
-        return reply.send({ backendState: updatedApp?.backendState });
-      } catch (error) {
-        fastify.log.error(error, `Failed to stop backend for app ID: ${appId}`);
-        return reply.code(500).send({ message: "Internal Server Error." });
-      }
+    if (isNaN(appId)) {
+      return reply.code(400).send({ message: "Invalid App ID format." });
     }
-  );
+    if (!editKey) {
+      return reply.code(401).send({ message: "Edit key is required." });
+    }
+
+    try {
+      const app = await prisma.app.findUnique({ where: { id: appId } });
+      if (!app) {
+        return reply.code(404).send({ message: "App not found." });
+      }
+      if (editKey !== app.editKey) {
+        return reply.code(403).send({ message: "Invalid edit key." });
+      }
+
+      // Call manager to stop (non-blocking)
+      denoManager.stopAppBackend(appId, force === "true");
+
+      // Give it a moment to potentially update state, then fetch latest
+      await new Promise((resolve) => setTimeout(resolve, 200)); // Small delay
+      const updatedApp = await prisma.app.findUnique({
+        where: { id: appId },
+      });
+
+      return reply.send({ backendState: updatedApp?.backendState });
+    } catch (error) {
+      fastify.log.error(error, `Failed to stop backend for app ID: ${appId}`);
+      return reply.code(500).send({ message: "Internal Server Error." });
+    }
+  });
   // --- Proxy Route ---
 
   // Route to proxy requests to the running Deno backend

@@ -527,17 +527,23 @@ function AppStatusPage() {
 
   // --- Backend Control Handlers ---
   const handleBackendAction = async (
-    action: "start" | "stop" | "clear_storage"
+    action: "start" | "stop" | "force_stop" | "clear_storage"
   ) => {
     if (!id || !editKey || !appData?.denoCode) {
       toast.error("Cannot perform backend action: Missing ID, key, or code.");
       return;
     }
 
+    let force = false;
+    if (action === "force_stop") {
+      action = "stop";
+      force = true;
+    }
+
     setIsBackendLoading(true);
     try {
       const response = await fetch(
-        `/api/apps/${id}/backend/${action}?editKey=${editKey}`,
+        `/api/apps/${id}/backend/${action}?editKey=${editKey}&force=${force}`,
         {
           method: "POST",
         }
@@ -583,6 +589,7 @@ function AppStatusPage() {
 
   const handleStartBackend = () => handleBackendAction("start");
   const handleStopBackend = () => handleBackendAction("stop");
+  const handleForceStopBackend = () => handleBackendAction("force_stop");
   const handleClearBackendStorage = () => handleBackendAction("clear_storage");
   // --- End Backend Control Handlers ---
 
@@ -1490,6 +1497,14 @@ function AppStatusPage() {
                   {isBackendLoading && appData.backendState === "STOPPING"
                     ? "Stopping..."
                     : "Stop Backend"}
+                </Button>
+                <Button
+                  onClick={handleForceStopBackend}
+                  size="sm"
+                  variant="destructive"
+                  disabled={appData.backendState !== "STOPPING"}
+                >
+                  Force Stop
                 </Button>
                 <Button
                   onClick={handleClearBackendStorage}

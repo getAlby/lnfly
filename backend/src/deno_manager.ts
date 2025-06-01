@@ -334,7 +334,7 @@ export class DenoManager {
     }
   }
 
-  async stopAppBackend(appId: number): Promise<void> {
+  async stopAppBackend(appId: number, force: boolean): Promise<void> {
     const appInfo = this.runningApps.get(appId);
     console.log(`Attempting to stop backend for app ${appId}...`);
 
@@ -377,6 +377,8 @@ export class DenoManager {
       console.log(`Cleared inactivity timer for app ${appId} during stop.`);
     }
 
+    let failedToStop = false;
+
     try {
       // 1. Update state to STOPPING
       // Avoid DB update if already stopped/failed
@@ -418,6 +420,11 @@ export class DenoManager {
       appInfo.process.on("close", () => clearTimeout(killTimeout));
     } catch (error) {
       console.error(`Error stopping backend for app ${appId}:`, error);
+      failedToStop = true;
+    }
+    if (failedToStop || force) {
+      console.log(`Force-stopping app ${appId}.`);
+
       // Attempt to cleanup map entry even if DB update or kill fails
       if (this.runningApps.has(appId)) {
         this.runningApps.delete(appId);
