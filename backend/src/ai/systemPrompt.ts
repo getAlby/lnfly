@@ -7,6 +7,7 @@ import { knowledgeLightningToolsParseInvoice } from "./knowledge/lightning_tools
 import { knowledgeLightningToolsRequestInvoice } from "./knowledge/lightning_tools_request_invoice";
 import { knowledgeNostrToolsPostNote } from "./knowledge/nostr_tools_post_note";
 import { knowledgeNWC } from "./knowledge/nwc";
+import { knowledgeReact } from "./knowledge/react";
 
 export const optionalSystemPromptSegments = [
   knowledgeBitcoinConnectPaymentDialog,
@@ -18,6 +19,7 @@ export const optionalSystemPromptSegments = [
   knowledgeBitcoinConnectNWC,
   knowledgeNostrToolsPostNote,
   knowledgeAI,
+  knowledgeReact,
 ] as const;
 
 export const buildSystemPrompt = (

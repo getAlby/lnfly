@@ -52,6 +52,9 @@ Deno is secure by default and can be run as child processes without endangering 
 - [x] Pay to upvote/downvote apps on homepage
 - [x] [Nostr Tools] Posting notes
 - [x] Basic AI prompting knowledge for app backends (via PPQ.ai)
+- [x] React knowledge
+- [ ] Nostr querying knowledge
+- [ ] Nostr zaps knowledge
 - [ ] User accounts
 
 ## Development
