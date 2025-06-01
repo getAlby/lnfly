@@ -3,7 +3,9 @@ export const knowledgeReact = {
   environment: "frontend",
   usecase:
     "Use React to simplify the development of more complex frontend applications",
-  prompt: `**HTML Code Structure:** Follow this structure for generating the necessary html code.
+  prompt: `**React 19 via esm.sh**
+- DO NOT use direct jsx/tsx. This is NOT supported. You must use the React API e.g. \`React.createElement\`.
+- **HTML Code Structure:** Follow this structure for generating the necessary html code.
 <!DOCTYPE html>
 <html lang="en">
   <head>
