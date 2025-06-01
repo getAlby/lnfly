@@ -218,10 +218,7 @@ export class DenoManager {
       denoProcess.stdout?.on("data", async (data) => {
         console.log(`[App ${appId} STDOUT]: ${data.toString().trim()}`);
 
-        if (
-          !hasStarted &&
-          data.toString().includes("Deno server running on port")
-        ) {
+        if (!hasStarted && data.toString().includes("running on port")) {
           console.log("Detected startup!", { appId });
           hasStarted = true;
 

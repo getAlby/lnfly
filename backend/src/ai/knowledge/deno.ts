@@ -45,6 +45,7 @@ serve((req: Request) => {
   return new Response("Hello from Deno!");
 }, { port });
 
+// Make sure to log this EXACT message, as it's used to detect startup.
 console.log(\`Deno server running on port \${port}\`);
 `,
 } as const;
