@@ -13,7 +13,17 @@ export const suggestions: Suggestion[] = [
   {
     title: "Video Paywall",
     prompt:
-      "User has to pay 21 sats before they can see the video https://www.youtube.com/watch?v=dQw4w9WgXcQ&pp=ygUJcmljayByb2xs which will be displayed on the page. The video should auto-start.",
+      "User has to pay 21 sats before they can see the video https://www.youtube.com/watch?v=dQw4w9WgXcQ&pp=ygUJcmljayByb2xs which will be displayed on the page. Once paid, the video should auto-start.",
+  },
+  {
+    title: "Nostr Bot",
+    prompt:
+      'Create a button that when pressed, it should do a request to the backend of the app to post a note to nostr. The content of the note should be "Hello World".',
+  },
+  {
+    title: "AI Chat",
+    prompt:
+      "Make a simple AI chat app, where I can type a message to prompt the AI.",
   },
   // {
   //   title: "Tetris Themes",
