@@ -4,7 +4,7 @@ GAME STORAGE
 - The backend must store the game state whenever the state changes.
 - There should be a current game
 - There should be a list of previous games
-- Each game should have an ID, start date, end date, status(waiting, active, or ended)
+- Each game should have an ID, start date, end date, status(waiting, active, or ended), whether the prize pool has been claimed
   - The countdown timer MUST be calculated from the end date minus the start date.
   - The game ID should be a simple sequential ID starting at 1.
 - Each game should have a list of tickets
@@ -22,17 +22,17 @@ GAME START
 - Do NOT add any additional increase to the timer. For example if the game was started with 2 tickets, then the timer must be 1200 seconds.
 
 TIME INCREASE
-- For each ticket purchased, the countdown time should increase by 600 seconds minus 5 seconds per hour that the game has been running.
-- The minimum countdown time increase should be 1 second per ticket.
+- For each ticket purchased, the countdown time should increase by 60 seconds.
 
 PAYMENTS
 - The backend should generate an invoice using NWC and store it on the ticket/donation.
+- The response of the request must ONLY contain the invoice.
 - While the user is waiting for the payment to be confirmed, a loading indicator should show.
 - Bitcoin Connect payment dialog must be used to make the payment.
 - the frontend must poll to the backend to verify the invoice was paid, by passing only the invoice in the request.
 - make sure to update the state of bitcoin connect payment dialog once the backend returns confirmation that the payment was made (the backend must return the preimage)
 - the backend MUST verify the payment was made by looking up up the invoice and MUST check that the preimage is non-empty, only then update the ticket/donation.
-- if the frontend does calls to verify the payment after the payment has already been processed, do not process it again (e.g. DO NOT alter the prize pool, DO NOT post new nostr events), but still return a success response with the necessary information.
+- if the backend receives a request to verify the payment after the ticket/donation has already been marked as paid, do not process it again (e.g. DO NOT alter the prize pool, DO NOT post new nostr events), but still return a success response with the necessary information (for verifying tickets purchases, make sure to return the same receipt data as below).
 
 TICKET PURCHASING
 - On the homepage there should be a single "Buy ticket (210 sats)" button. When clicked it will open a purchase modal.
@@ -41,7 +41,7 @@ TICKET PURCHASING
   - the total price
   - the total amount of time the countdown timer will be increased (based on the time increase calculation above)
 - When the backend creates the invoice, the invoice description should be: BLOTTO Game #<game ID> Tickets #<from public ID>-#<to public ID>
-- When the backend returns a success response that the ticket(s) were paid, the response should contain receipt data of the payment:
+- When the backend returns a success response that the ticket(s) were paid (from polling), the response should contain receipt data of the payment:
   - the game ID,
   - from public ID
   - to public ID,
@@ -51,7 +51,6 @@ TICKET PURCHASING
   - A button to download the receipt, which should be a different color and should flash until the user clicks it.
     - The filename of the receipt should be "BLOTTO_<game ID>_<from public ID>-<to public ID>.txt" and the contents should be the hidden ID.
   - text telling them to screenshot the page (in bold).
-  - test "once game ends, you have 24 hours to claim your prize".
 - Once the modal is closed make sure to reset any state so that the user can buy more tickets if they want to.
 
 PRIZE POOL
@@ -77,18 +76,18 @@ WAITING DISPLAY
 - If less than 2 tickets have been purchased, display "The game will start once 2 tickets are purchased".
 - Still show the countdown timer, but have it show "--:--:--"
 
-GAME ENDED
--  Show the winning ticket number (public ID) in large text.
-- Allow users to either paste the hidden ID in an text input, or attach their ticket file they previously downloaded (using an input field).
-- They also need to provide their lightning address to claim the prize.
-- If the ID matches, the backend must use Nostr Wallet Connect to pay the prize to the provided lightning address (using lightning tools to fetch an invoice) and then reset the game.
-- If the prize is not claimed within 24 hours, the game should be reset.
-- Show a countdown of time to claim the prize. It must locally decrease by 1 every second to show a smooth countdown. This MUST be done without requiring to do another API call to get the state.
-- While waiting for the prize to be claimed, the "Buy ticket" button and donate button MUST NOT be visible, and the backend MUST NOT accept requests to buy tickets, or process requests to verify existing tickets, or process donations.
-- Once the prize is paid out, the game must be reset so players can buy tickets again.
+GAME END
+- If the countdown hits 0, the game ends and there should be an animated text on top of all other elements: "GAME END! Winning Ticket: #(ticket id here)", and below 'Click on "View previous games" to claim prize'
+- The game should be reset so players can buy tickets again.
 
 VIEWING PREVIOUS GAMES
-- There should be a link (in a small font, on its own row) to view previous games which will open in a modal: (Game ID, Date started, Date ended, number tickets sold + Prize pool in sats + winning ticket public ID + whether the ticket was claimed or not)
+- There should be a link (in a small font, on its own row) to view previous games which will open in a modal: (Game ID, Date started, Date ended, number tickets sold + Prize pool in sats + winning ticket public ID + whether the ticket was claimed or not, and a button to claim the prize for that game)
+
+CLAIMING PRIZE
+- Allow users to either paste the hidden ID in an text input, or attach their ticket file they previously downloaded (using an input field).
+- They also need to provide their lightning address to claim the prize.
+- If the Game ID and hidden ID matches the winner for that game, the backend must use Nostr Wallet Connect to pay the prize to the provided lightning address (using lightning tools to fetch an invoice).
+- Do not allow the user to claim the prize if it already has been claimed.
 
 FOLLOW ON NOSTR
 - There should be a link (in a small font, on its own row) which opens https://njump.me/npub1gcevkl0nz0t2wxc4pqlmudveqsu2l36f463zw6m9jr3j9d5n6esqur6c2m in a new tab
@@ -96,20 +95,19 @@ FOLLOW ON NOSTR
 GAME STYLE
 - Style the game with a fun, lightning lottery theme.
 - Make sure the content is vertically centered if it doesn't full the entire height of the screen. Make sure elements are HORIZONTALLY centered as well. 
-- Countdown should have a border around it.
-- Tickets sold, prize pool should be on the same row and have borders around them.
+- Countdown should have a white border around it.
+- Tickets sold, prize pool should be on the same row and have white borders around them.
 
 NOSTR EVENTS
 - The backend should post notes to Nostr when the following events happen.
 - All events should have a link at the bottom to "Join the game at https://lnfly.albylabs.com/api/apps/168/view"
-- Make sure to not double-post events as this will cause the nostr account to be blocked for spamming.
+- Discard posting if the last nostr event was less than 5 seconds ago.
 
 NOSTR EVENT LIST
 - When a new game starts after at least two tickets purchased (include game ID)
 - When a game ends (include game ID, number of tickets sold, prize pool, winning ticket number)
 - When one or more tickets were purchased (include number of tickets purchased, total number of paid tickets, new prize pool amount, new total countdown timeout in HH:MM:SS). If the number of purchased tickets hits (10, 100, 1000, 10000, 100000) announce that as part of the message. If >= 10 (shrimp), 100 (dolphin), 1000 (shark), 10000 (whale) tickets are purchased note that this purchaser is this type of bitcoiner. e.g. if 5000 tickets were bought, then this purchaser is a shark.
-- When the prize was claimed (winning ticket number, total prize pool, also show it's possible to buy tickets again)
-- When the claim timer expires (show it's possible to buy tickets again)
+- When the prize was claimed (winning ticket number, total prize pool)
 - When a new donation is added to the prize pool (include the donation amount * 0.99). Specifically mention that it's a donation.
 
 NOSTR EVENT AI CONTENT
@@ -121,4 +119,3 @@ NOSTR EVENT AI CONTENT
 
 REACT
 - The frontend should use React rather than plain HTML.
-- Double check dependencies of callbacks, effects etc. To ensure they are not executed more than intended.
