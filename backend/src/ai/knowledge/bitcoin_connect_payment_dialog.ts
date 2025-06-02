@@ -9,9 +9,13 @@ You know how to use bitcoin connect on the frontend to make payments:
 <script type="module">
 import {launchPaymentModal} from 'https://esm.sh/@getalby/bitcoin-connect';
 
+let registeredExternalPayment = false;
 const {setPaid} = launchPaymentModal({
   invoice: 'lnbc...',
   onPaid: (response) => {
+    if (!registeredExternalPayment) {
+      return;
+    }
     clearInterval(checkPaymentInterval);
     setTimeout(() => {
       // HERE YOU NEED TO ACTIVATE THE PAID FEATURE!
@@ -31,6 +35,7 @@ const checkPaymentInterval = setInterval(async () => {
   const paid = await invoice.verifyPayment();
 
   if (paid && invoice.preimage) {
+    registeredExternalPayment = true;
     setPaid({
       preimage: invoice.preimage,
     });
