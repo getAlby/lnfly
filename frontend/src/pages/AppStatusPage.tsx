@@ -1502,7 +1502,7 @@ function AppStatusPage() {
                   onClick={handleForceStopBackend}
                   size="sm"
                   variant="destructive"
-                  disabled={appData.backendState !== "STOPPING"}
+                  //disabled={appData.backendState !== "STOPPING"}
                 >
                   Force Stop
                 </Button>

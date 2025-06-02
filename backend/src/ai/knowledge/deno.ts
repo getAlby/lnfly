@@ -12,12 +12,11 @@ export const knowledgeDeno = {
 - The HTTP server must only have api endpoints. It should not serve static HTML.
 - Keep the backend simple and focused on the prompt's requirements.
 
-- **Persistent Storage:** Your backend has access to a persistent JSON file for storing data between restarts.
+- **Persistent Storage:** Your backend has access to a persistent sqlite file for storing data between restarts.
   - The path to this file is provided in the \`STORAGE_PATH\` environment variable.
   - Read and write permissions (\`--allow-read\`, \`--allow-write\`) for this specific file path are automatically granted.
   - Use \`Deno.env.get("STORAGE_PATH")\` to get the path.
-  - Use \`Deno.readTextFile\` and \`JSON.parse\` to read the data.
-  - Use \`JSON.stringify\` and \`Deno.writeTextFile\` to save the data.
+  - Use \`import { DatabaseSync, /* + other necessary imports */ } from 'node:sqlite';\` and \`const database = new DatabaseSync(path);\`
 
 - **Payments Support**
   - The app developer can specify a lightning address to receive payments made by the user.
