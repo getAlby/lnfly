@@ -13,6 +13,8 @@ const ln = new LightningAddress("example@getalby.com");
 await ln.fetch();
 const invoice = await ln.requestInvoice({ satoshi: 21, comment: "Optional comment" });
 
+// the string invoice is available as \`invoice.paymentRequest\`
+
 // to check if it was paid:
 const paid = await invoice.verifyPayment(); // returns boolean
 </script>`,
