@@ -109,6 +109,36 @@ function AppStatusPage() {
   const editKey = window.localStorage.getItem(`app_${id}_editKey`);
   const previewKey = window.localStorage.getItem(`app_${id}_previewKey`);
 
+  // Chatwoot
+  useEffect(() => {
+    const script = document.createElement("script");
+
+    script.async = true;
+    script.appendChild(
+      document.createTextNode(`(function (d, t) {
+        var BASE_URL = "https://app.chatwoot.com";
+        var g = d.createElement(t),
+          s = d.getElementsByTagName(t)[0];
+        g.src = BASE_URL + "/packs/js/sdk.js";
+        g.defer = true;
+        g.async = true;
+        s.parentNode.insertBefore(g, s);
+        g.onload = function () {
+          window.chatwootSDK.run({
+            websiteToken: "JU92KTCPm16NEGc7uCAGEMsm",
+            baseUrl: BASE_URL,
+          });
+        };
+      })(document, "script");`)
+    );
+
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
+
   const setAppPublished = async (published: boolean) => {
     if (!id || !editKey) {
       console.error("Cannot publish: Missing App ID or edit key.");
