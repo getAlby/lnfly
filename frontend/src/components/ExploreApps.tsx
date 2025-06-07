@@ -271,7 +271,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                     </a>
                   )}
                   <a href={`/api/apps/${app.id}/view`} target="_blank">
-                    <Button size="sm">Run</Button>
+                    <Button size="sm">View</Button>
                   </a>
                   <Button
                     size="sm"
