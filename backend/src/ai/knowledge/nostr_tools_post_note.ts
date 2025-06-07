@@ -35,7 +35,8 @@ const signedEvent = finalizeEvent(eventTemplate, sk)
 
 await Promise.any(pool.publish(relays, signedEvent))
 
-relay.close()
+// once no longer needed you can close the connection
+pool.close(relays);
 
 </script>`,
 } as const;

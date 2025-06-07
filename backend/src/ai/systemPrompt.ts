@@ -6,6 +6,7 @@ import { knowledgeDeno } from "./knowledge/deno";
 import { knowledgeLightningToolsParseInvoice } from "./knowledge/lightning_tools_parse_invoice";
 import { knowledgeLightningToolsRequestInvoice } from "./knowledge/lightning_tools_request_invoice";
 import { knowledgeNostrToolsPostNote } from "./knowledge/nostr_tools_post_note";
+import { knowledgeNostrToolsSubscribe } from "./knowledge/nostr_tools_subscribe";
 import { knowledgeNWC } from "./knowledge/nwc";
 import { knowledgeReact } from "./knowledge/react";
 
@@ -18,6 +19,7 @@ export const optionalSystemPromptSegments = [
   knowledgeDeno,
   knowledgeBitcoinConnectNWC,
   knowledgeNostrToolsPostNote,
+  knowledgeNostrToolsSubscribe,
   knowledgeAI,
   knowledgeReact,
 ] as const;
