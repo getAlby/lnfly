@@ -4,7 +4,7 @@ GAME STORAGE
 - The backend must store the game state whenever the state changes.
 - There should be a current game
 - There should be a list of previous games
-- Each game should have an ID, start date, end date, status(waiting, active, or ended), whether the prize pool has been claimed
+- Each game should have an ID, start date, end date, status(waiting, active, or ended), whether the prize pool has been claimed, the winning ticket ID, and the payout invoice
   - The countdown timer MUST be calculated from the end date minus the start date.
   - The game ID should be a simple sequential ID starting at 1.
 - Each game should have a list of tickets
@@ -19,25 +19,29 @@ NEW GAME
 
 GAME START
 - Once at least 2 tickets are purchased, the game will start.
-- Do NOT add any additional increase to the timer. For example if the game was started with 2 tickets, then the timer must be 1200 seconds.
+- By default the game should start with a countdown of 0 + the time calculation of the number of tickets purchased.
+- Special case: if exactly 2 tickets are purchased at the time of game start, add another 2 hours to the countdown time.
 
 TIME INCREASE
-- For each ticket purchased, the countdown time should increase by 60 seconds.
+- For each ticket purchased (not just on game start), the countdown time should increase by 60 seconds.
 
 PAYMENTS
-- The backend should generate an invoice using NWC and store it on the ticket/donation.
+- The backend should generate an invoice using NWC and store it on the ticket(s)/donation.
 - The response of the request must ONLY contain the invoice.
 - While the user is waiting for the payment to be confirmed, a loading indicator should show.
 - Bitcoin Connect payment dialog must be used to make the payment.
 - the frontend must poll to the backend to verify the invoice was paid, by passing only the invoice in the request.
 - make sure to update the state of bitcoin connect payment dialog once the backend returns confirmation that the payment was made (the backend must return the preimage)
-- the backend MUST verify the payment was made by looking up up the invoice and MUST check that the preimage is non-empty, only then update the ticket/donation.
-- if the backend receives a request to verify the payment after the ticket/donation has already been marked as paid, do not process it again (e.g. DO NOT alter the prize pool, DO NOT post new nostr events), but still return a success response with the necessary information (for verifying tickets purchases, make sure to return the same receipt data as below).
+- the backend MUST verify the payment was made by looking up up the invoice and MUST check that the preimage is non-empty, only then update the ticket(s)/donation.
+- if the backend receives a request to verify the payment after the ticket(s)/donation has already been marked as paid, do not process it again (e.g. DO NOT alter the prize pool, DO NOT post new nostr events), but still return a success response with the necessary information (for verifying tickets purchases, make sure to return the same receipt data as below).
 
 TICKET PURCHASING
-- On the homepage there should be a single "Buy ticket (210 sats)" button. When clicked it will open a purchase modal.
+- On the homepage there should be a single "Buy tickets" button. When clicked it will open a purchase modal.
 - The purchase modal should show:
-  - a way to choose number of tickets (up to 10000 tickets)
+  - an input to choose number of tickets
+    - the default value should be 10 tickets
+    - the max property should be 10000
+    - make sure the user can clear the input completely and type (the onChange handler should set the exact target value, parse the value on submit instead)
   - the total price
   - the total amount of time the countdown timer will be increased (based on the time increase calculation above)
 - When the backend creates the invoice, the invoice description should be: BLOTTO Game #<game ID> Tickets #<from public ID>-#<to public ID>
@@ -67,27 +71,33 @@ FETCHING BACKEND GAME STATE
 MAIN PAGE DISPLAY
 - The title should show on the main page.
 - The app version should be shown on the page next to the title, but in a much smaller font and should be styled differently. The current version is V2.
-- The app description should be shown under the title: "Lightning Lottery - 210 sats per ticket" and "each ticket purchased increases countdown timer" (both on separate lines, second line smaller text. Include a relevant emoji in front of each sentence)
+- The app description should be shown under the title: "Lightning Lottery - 21 sats per ticket" and "each ticket purchased increases countdown timer" (both on separate lines, second line smaller text. Include a relevant emoji in front of each sentence)
 - The countdown timer should show on the main page. IMPORTANT: if the game is STARTED, it must locally decrease by 1 every second to show a smooth countdown. This MUST be done without requiring to do another API call to get the state.
 - The amount of PAID tickets and the prize pool should show on the main page.
-- Whenever the latest polled state has a different (increased) countdown timer than the previous state, there should be a "timeout increased!" animated text which will be shown on top of any other elements. This MUST be completely separate from the game state fetching code to avoid accidentally triggering another fetch.
+- Whenever the latest polled state has a different (increased) countdown timer than the previous state, and the page has been open for more than 20 seconds, there should be a "timeout increased!" notification next to the countdown timer. This MUST be completely separate from the game state fetching code to avoid accidentally triggering another fetch.
 
 WAITING DISPLAY
 - If less than 2 tickets have been purchased, display "The game will start once 2 tickets are purchased".
 - Still show the countdown timer, but have it show "--:--:--"
 
 GAME END
-- If the countdown hits 0, the game ends and there should be an animated text on top of all other elements: "GAME END! Winning Ticket: #(ticket id here)", and below 'Click on "View previous games" to claim prize'
+- The backend should choose a winning ticket randomly from the PAID tickets in the current game.
+- If the countdown hits 0, the game ends and there should be an animated text on top of all other elements: "GAME ENDED!", and below 'Click on "View previous games" to view winning ticket and claim prize'
 - The game should be reset so players can buy tickets again.
 
 VIEWING PREVIOUS GAMES
-- There should be a link (in a small font, on its own row) to view previous games which will open in a modal: (Game ID, Date started, Date ended, number tickets sold + Prize pool in sats + winning ticket public ID + whether the ticket was claimed or not, and a button to claim the prize for that game)
+- There should be a link (in a small font, on its own row) to view previous games which will open in a modal: (Game ID, Date started, Date ended, number tickets sold + Prize pool in sats + winning ticket public ID + whether the ticket was claimed or not, and a button to claim the prize for that game if not claimed + the time remaining to claim the prize)
 
 CLAIMING PRIZE
-- Allow users to either paste the hidden ID in an text input, or attach their ticket file they previously downloaded (using an input field).
+- Allow users to either paste their game ID and hidden ID in text inputs, or attach their ticket file they previously downloaded (using an input field - which should also read the ticket filename and assign the Game ID field).
 - They also need to provide their lightning address to claim the prize.
-- If the Game ID and hidden ID matches the winner for that game, the backend must use Nostr Wallet Connect to pay the prize to the provided lightning address (using lightning tools to fetch an invoice).
+- If the Game ID and hidden ID matches the winner for that game:
+  - if the game's payout_invoice is NULL, use the provided lightning address and lightning tools to fetch an invoice for the prize pool amount.
+  - set the payout invoice for the game only if it is not set (e.g. `where id = gameId and payout_invoice is NULL`)
+  - get the payout invoice from the DB to ensure we are using the original one (to avoid double payouts)
+  - the backend must use Nostr Wallet Connect to pay the payout invoice.
 - Do not allow the user to claim the prize if it already has been claimed.
+- Only allow prizes to be claimed up to 24 hours after the game ended.
 
 FOLLOW ON NOSTR
 - There should be a link (in a small font, on its own row) which opens https://njump.me/npub1gcevkl0nz0t2wxc4pqlmudveqsu2l36f463zw6m9jr3j9d5n6esqur6c2m in a new tab
@@ -95,12 +105,21 @@ FOLLOW ON NOSTR
 GAME STYLE
 - Style the game with a fun, lightning lottery theme.
 - Make sure the content is vertically centered if it doesn't full the entire height of the screen. Make sure elements are HORIZONTALLY centered as well. 
-- Countdown should have a white border around it.
+- Countdown should have a white border around it. Make the box wider with bigger font than the tickets sold and prize pool and use a large letter spacing.
+- If the game is active and the countdown time is less than 30 seconds, make the text flash.
+- If the game is active and the countdown time is less than two minutes, use a red text color.
+- If the game is active and the countdown time is less than one hour, use an orange text color.
+- If the countdown time is bigger than one hour or the game is waiting, use a white text color.
 - Tickets sold, prize pool should be on the same row and have white borders around them.
+- The small links should be white with 0.8 alpha
+- The buy tickets button should be green
+- The background should be a gradient purple
+- Do not use dark backgrounds for modals
+- Do not use alert dialogs for success. Use positive toast / notification messages instead
 
 NOSTR EVENTS
 - The backend should post notes to Nostr when the following events happen.
-- All events should have a link at the bottom to "Join the game at https://lnfly.albylabs.com/api/apps/168/view"
+- All events should have a link at the bottom to "Join the game at https://lnfly.albylabs.com/api/apps/199/view"
 - Discard posting if the last nostr event was less than 5 seconds ago.
 
 NOSTR EVENT LIST
