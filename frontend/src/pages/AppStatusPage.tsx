@@ -812,25 +812,25 @@ function AppStatusPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <div className="flex items-start gap-2">
-                  <Label className="pt-2">Prompt:</Label>
-                  <div className="flex-grow relative">
-                    <Textarea
-                      value={promptText} // Use state for value
-                      onChange={(e) => setPromptText(e.target.value)} // Update state on change
-                      readOnly={appData.published} // Editable only if unpublished
-                      className={`pr-10 ${appData.published ? "bg-muted" : ""}`} // Adjust style when read-only
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Prompt:</Label>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-1 right-1 h-7 w-7" // Position button
+                      className="h-7 w-7"
                       onClick={() => copyToClipboard(appData.prompt || "")}
                       title="Copy prompt"
                     >
                       <CopyIcon className="h-4 w-4" />
                     </Button>
                   </div>
+                  <Textarea
+                    value={promptText} // Use state for value
+                    onChange={(e) => setPromptText(e.target.value)} // Update state on change
+                    readOnly={appData.published} // Editable only if unpublished
+                    className={appData.published ? "bg-muted" : ""} // Adjust style when read-only
+                  />
                 </div>
                 {/* Action Buttons: Regenerate, Suggestions, System Prompt, HTML, Backend */}
                 <div className="flex flex-wrap gap-2 mt-2">
