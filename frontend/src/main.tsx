@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom"; // Import necessary router components
 import App from "./App.tsx";
 import AppStatusPage from "./pages/AppStatusPage.tsx"; // Import status page component
+import AppLoadingPage from "./pages/AppLoadingPage.tsx"; // Import app loading page component
 // No need to import AppViewPage
 import { Toaster } from "./components/ui/sonner.tsx";
 
@@ -19,7 +20,11 @@ const router = createBrowserRouter([
     path: "/apps/:id",
     element: <AppStatusPage />, // App status page
   },
-  // Remove the route for /apps/:id/view as it will be handled by the backend directly
+  {
+    path: "/apps/:id/view",
+    element: <AppLoadingPage />, // Intermediate loading page
+  },
+  // Backend will handle /api/apps/:id/view directly
 ]);
 
 createRoot(document.getElementById("root")!).render(
