@@ -1102,7 +1102,7 @@ function AppStatusPage() {
                     href={
                       buttonDisabled
                         ? "#"
-                        : `/api/apps/${id}/view${
+                        : `/apps/${id}/view${
                             appData.published ? "" : `?previewKey=${previewKey}`
                           }`
                     }
