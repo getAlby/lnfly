@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getAppViewUrl } from "@/lib/utils";
 import { launchPaymentModal } from "@getalby/bitcoin-connect-react"; // Import Bitcoin Connect
 import { useEffect, useRef, useState } from "react"; // Added useRef
 import { toast } from "sonner"; // Import toast for notifications
@@ -14,6 +15,7 @@ interface App {
   prompt: string;
   status: string; // Assuming status is a string like 'completed'
   zapAmount?: number; // Added for the Zap button
+  subdomain?: string;
   // Add other potential fields like title, description if available
 }
 
@@ -270,7 +272,10 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                       </Button>
                     </a>
                   )}
-                  <a href={`/api/apps/${app.id}/view`} target="_blank">
+                  <a
+                    href={getAppViewUrl(app.id, app.subdomain)}
+                    target="_blank"
+                  >
                     <Button size="sm">View</Button>
                   </a>
                   <Button

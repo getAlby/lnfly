@@ -14,10 +14,50 @@ const fastify = Fastify({
   logger: true,
 });
 
+const subdomainConstraint = `^[a-z0-9]+\\.${process.env.BASE_URL?.split(
+  "//"
+)?.[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
+
+fastify.get(
+  "/",
+  {
+    constraints: {
+      host: new RegExp(subdomainConstraint),
+    },
+  },
+  async (req, res) => {
+    // Extract the subdomain from the request hostname
+    const subdomain = req.hostname.split(".")[0]; // Assuming the format is subdomain.example.com
+
+    // Forward the request to the other handler
+    const app = await prisma.app.findFirst({
+      where: {
+        subdomain,
+      },
+    });
+
+    const id = app?.id || parseInt(subdomain);
+    const response = await fastify.inject({
+      method: "GET",
+      url: `/api/apps/${id}/view`,
+      headers: req.headers, // Forward headers if needed
+    });
+    return res.type("text/html").send(response.payload);
+  }
+);
+
 // Register fastify-static to serve the React app build
+// but only on the main domain
+const hostConstraint = `^${process.env.BASE_URL?.split("//")?.[1].replace(
+  /[.*+?^${}()|[\]\\]/g,
+  "\\$&"
+)}$`;
 fastify.register(fastifyStatic, {
   root: path.join(__dirname, "../../frontend/dist"), // Path to the built React app
   prefix: "/", // Serve from the root
+  constraints: {
+    host: new RegExp(hostConstraint),
+  },
 });
 
 // Register reply-from for proxying
