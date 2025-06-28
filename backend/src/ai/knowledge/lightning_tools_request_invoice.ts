@@ -6,7 +6,7 @@ export const knowledgeLightningToolsRequestInvoice = {
 You know how to use lightning tools to generate a lightning invoice for a lightning address and check if it was paid:
 
 <script type="module">
-import { LightningAddress } from "https://esm.sh/@getalby/lightning-tools";
+import { LightningAddress, Invoice } from "https://esm.sh/@getalby/lightning-tools";
 
 const ln = new LightningAddress("example@getalby.com");
 
@@ -30,5 +30,10 @@ const invoice = await ln.requestInvoice({ satoshi: 21, comment: "Optional commen
 
 // to check if it was paid:
 const paid = await invoice.verifyPayment(); // returns boolean
+
+// later you can also check it was paid if you have the payment request (pr) and verify string:
+const invoice = new Invoice({pr, verify});
+const paid = await invoice.verifyPayment(); // returns boolean
+
 </script>`,
 } as const;
