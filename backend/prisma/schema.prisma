@@ -38,6 +38,7 @@ model App {
   zapAmount Int @default(0) // Net zap amount (sats)
   fullOutput String?
   model       String @default("deepseek/deepseek-chat:free")
+  subdomain String? @unique // New field for subdomain
 }
 
 enum AppState {

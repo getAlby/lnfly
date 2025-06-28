@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select"; // Import Select components
 import { Textarea } from "@/components/ui/textarea";
 import { copyToClipboard } from "@/lib/clipboard";
+import { getAppViewUrl } from "@/lib/utils";
 import { CopyIcon, InfoIcon, PencilIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -51,6 +52,7 @@ interface AppData {
   nwcUrl?: string | null; // Add nwcUrl field
   nsec?: string | null; // Add nsec field
   ppqApiKey?: string | null;
+  subdomain?: string | null;
   // Backend related fields (only present if editKey matches)
   denoCode?: string | null;
   backendState?: BackendState | null;
@@ -84,6 +86,7 @@ function AppStatusPage() {
   const [nwcUrl, setNwcUrl] = useState(""); // Add state for NWC URL
   const [nsec, setNsec] = useState(""); // Add state for nsec
   const [ppqApiKey, setPpqApiKey] = useState(""); // Add state for ppqApiKey
+  const [subdomain, setSubdomain] = useState(""); // Add state for subdomain
   const [showLightningAddressModal, setShowLightningAddressModal] =
     useState(false);
   const [showNWCModal, setShowNWCModal] = useState(false);
@@ -181,6 +184,43 @@ function AppStatusPage() {
       console.error("Error publishing app:", error);
       alert(
         `Error publishing app: ${
+          error instanceof Error ? error.message : "An unknown error occurred."
+        }`
+      );
+    }
+  };
+
+  const saveSubdomain = async () => {
+    if (!id || !editKey) {
+      console.error("Cannot set subdomain: Missing App ID or edit key.");
+      alert("Error: Missing App ID or edit key.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/apps/${id}?editKey=${editKey}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subdomain }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(
+          `Failed to set subdomain: ${response.status} - ${
+            errorText || response.statusText
+          }`
+        );
+      }
+
+      toast(`Subdomain updated successfully.`);
+      fetchStatus();
+    } catch (error) {
+      console.error("Error setting subdomain:", error);
+      alert(
+        `Error setting subdomain: ${
           error instanceof Error ? error.message : "An unknown error occurred."
         }`
       );
@@ -471,6 +511,9 @@ function AppStatusPage() {
         if (data.model && isInitialLoad) {
           setSelectedModel(data.model);
         }
+        if (!subdomain) {
+          setSubdomain(data.subdomain || "");
+        }
         setError(null); // Clear error on successful fetch
 
         // Stop polling if the process is finished (completed or failed)
@@ -509,6 +552,7 @@ function AppStatusPage() {
       nsec,
       ppqApiKey,
       promptText,
+      subdomain,
     ]
   );
 
@@ -1090,6 +1134,25 @@ function AppStatusPage() {
               )}
               {/* End PPQ API key Input */}
 
+              {/* Subdomain Input - Added */}
+              {editKey && (
+                <div className="mt-4 space-y-2">
+                  <Label htmlFor="subdomain" className="block">
+                    Subdomain
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="subdomain"
+                      placeholder="your-app"
+                      value={subdomain}
+                      onChange={(e) => setSubdomain(e.target.value)}
+                    />
+                    <Button onClick={saveSubdomain}>Set</Button>
+                  </div>
+                </div>
+              )}
+              {/* End Subdomain Input */}
+
               {(appData.state === "COMPLETED" ||
                 appData.state === "REVIEWING") &&
                 (appData.nwcUrl ||
@@ -1102,7 +1165,10 @@ function AppStatusPage() {
                     href={
                       buttonDisabled
                         ? "#"
-                        : `/api/apps/${id}/view${
+                        : `${getAppViewUrl(
+                            appData.id,
+                            appData.subdomain || undefined
+                          )}${
                             appData.published ? "" : `?previewKey=${previewKey}`
                           }`
                     }

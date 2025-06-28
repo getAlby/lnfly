@@ -10,7 +10,7 @@ swap_size_mb = 2048
 [build]
 
 [env]
-  BASE_URL = 'https://lnfly.fly.dev'
+  BASE_URL = 'https://lnfly.albylabs.com'
   DATABASE_URL = 'file:/data/lnfly.db'
   DENO_PATH = '/root/.deno/bin/deno'
   WORK_DIR = '/data'

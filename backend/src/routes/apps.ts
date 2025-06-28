@@ -71,6 +71,7 @@ async function appRoutes(
               prompt: true,
               state: true,
               title: true,
+              subdomain: true,
               zapAmount: true, // Select the stored zap amount
               // Optionally include zap count if needed (requires separate aggregation or relation count)
               // _count: { select: { zaps: { where: { paid: true } } } } // Example for count
@@ -190,6 +191,7 @@ async function appRoutes(
           updatedAt: app.updatedAt,
           state: app.state,
           published: app.published,
+          subdomain: app.subdomain,
           ...(request.query.editKey === app.editKey
             ? {
                 errorMessage: app.errorMessage,
@@ -242,6 +244,7 @@ async function appRoutes(
     title?: string;
     state?: AppState; // Add state field
     errorMessage?: string | null; // Add errorMessage field
+    subdomain?: string;
   }
 
   // Route to update an app (e.g., publish, cancel)
@@ -261,6 +264,7 @@ async function appRoutes(
       title,
       state,
       errorMessage,
+      subdomain,
     } = request.body;
     const appId = parseInt(id, 10);
 
@@ -281,7 +285,8 @@ async function appRoutes(
       ppqApiKey === undefined &&
       title === undefined &&
       state === undefined &&
-      errorMessage === undefined
+      errorMessage === undefined &&
+      subdomain === undefined
     ) {
       return reply.code(400).send({ message: "No updatable fields provided." });
     }
@@ -302,6 +307,22 @@ async function appRoutes(
 
       if (editKey !== app.editKey) {
         return reply.code(403).send({ message: "Invalid edit key." });
+      }
+
+      if (subdomain) {
+        const existingAppWithSubdomain = await prisma.app.findUnique({
+          where: { subdomain: subdomain },
+        });
+
+        if (existingAppWithSubdomain && existingAppWithSubdomain.id !== appId) {
+          return reply.code(400).send({ message: "Subdomain already exists." });
+        }
+
+        if (!/^[a-z0-9]+$/.test(subdomain)) {
+          return reply
+            .code(400)
+            .send({ message: "Subdomain can only contain a-z and 0-9." });
+        }
       }
 
       if (state === AppState.FAILED) {
@@ -328,6 +349,7 @@ async function appRoutes(
           title,
           state,
           errorMessage,
+          subdomain,
         },
         select: {
           id: true,
@@ -339,6 +361,7 @@ async function appRoutes(
           title: true,
           state: true, // Select updated state
           errorMessage: true, // Select updated error message
+          subdomain: true, // Select updated subdomain
         },
       });
 
