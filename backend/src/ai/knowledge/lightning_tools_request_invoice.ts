@@ -13,6 +13,19 @@ const ln = new LightningAddress("example@getalby.com");
 await ln.fetch();
 const invoice = await ln.requestInvoice({ satoshi: 21, comment: "Optional comment" });
 
+/* returns {
+  paymentRequest: string,
+  paymentHash: string,
+  preimage: string | null,
+  verify: string | null,
+  satoshi: number,
+  expiry: number,
+  timestamp: number,
+  description: string | null,
+  verifyPayment(): Promise<boolean>
+}
+*/
+
 // the string invoice is available as \`invoice.paymentRequest\`
 
 // to check if it was paid:
