@@ -18,7 +18,7 @@ const subdomainConstraint = `^[a-z0-9]+\\.${process.env.BASE_URL?.split(
   "//"
 )?.[1].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`;
 
-fastify.get(
+fastify.get<{ Querystring: { previewKey?: string } }>(
   "/",
   {
     constraints: {
@@ -37,9 +37,10 @@ fastify.get(
     });
 
     const id = app?.id || parseInt(subdomain);
+    const previewKey = req.query.previewKey;
     const response = await fastify.inject({
       method: "GET",
-      url: `/api/apps/${id}/view`,
+      url: `/api/apps/${id}/view${previewKey && `?previewKey=${previewKey}`}`,
       headers: req.headers, // Forward headers if needed
     });
     return res.type("text/html").send(response.payload);
