@@ -40,7 +40,9 @@ fastify.get<{ Querystring: { previewKey?: string } }>(
     const previewKey = req.query.previewKey;
     const response = await fastify.inject({
       method: "GET",
-      url: `/api/apps/${id}/view${previewKey && `?previewKey=${previewKey}`}`,
+      url: `/api/apps/${id}/view${
+        previewKey ? `?previewKey=${previewKey}` : ""
+      }`,
       headers: req.headers, // Forward headers if needed
     });
     return res.type("text/html").send(response.payload);
