@@ -9,6 +9,7 @@ import {
 import "websocket-polyfill";
 import { z } from "zod"; // Import Zod for validation
 import {
+  defaultModel,
   evaluatePrompt,
   executePrompt,
   generateAppTitle,
@@ -123,6 +124,7 @@ async function appRoutes(
           data: {
             prompt: prompt,
             state: AppState.INITIALIZING, // Use Enum
+            model: defaultModel,
           },
           select: {
             id: true,

@@ -1,26 +1,44 @@
+import {
+  BotIcon,
+  CoinsIcon,
+  DropletIcon,
+  EyeIcon,
+  Gamepad2Icon,
+  LinkIcon,
+  LucideProps,
+  MessageSquareIcon,
+} from "lucide-react";
+
 type Suggestion = {
   title: string;
   prompt: string;
+  icon: React.ForwardRefExoticComponent<
+    Omit<LucideProps, "ref"> & React.RefAttributes<SVGSVGElement>
+  >;
   hasBackend?: boolean;
 };
 
 export const suggestions: Suggestion[] = [
   {
-    title: "Revivable Snake Game",
+    icon: Gamepad2Icon,
+    title: "Snake Game",
     prompt:
       "Make a classic snake game but the only way to die is by the snake hitting itself. When you lose you can either choose to pay 21 sats to continue (re-spawning your snake and keeping your score and snake length but move the snake re-spawn position so the snake doesn't die), or restart for free.",
   },
   {
+    icon: EyeIcon,
     title: "Video Paywall",
     prompt:
       "User has to pay 21 sats before they can see the video https://www.youtube.com/watch?v=dQw4w9WgXcQ&pp=ygUJcmljayByb2xs which will be displayed on the page. Once paid, the video should auto-start.",
   },
   {
+    icon: BotIcon,
     title: "Nostr Bot",
     prompt:
       'Create a button that when pressed, it should do a request to the backend of the app to post a note to nostr. The content of the note should be "Hello World".',
   },
   {
+    icon: MessageSquareIcon,
     title: "AI Chat",
     prompt:
       "Make a simple AI chat app, where I can type a message to prompt the AI.",
@@ -36,6 +54,7 @@ export const suggestions: Suggestion[] = [
   //     "An app that has THE BUTTON. When you click it and pay the 21 sat fee, all sorts of amazing things happen, like fireworks and so forth.",
   // },
   {
+    icon: CoinsIcon,
     title: "Coinflip",
     hasBackend: true,
     prompt: `make a simple app with title "Flip a coin" and two buttons (heads or tails). When the user presses one of the buttons:
@@ -48,6 +67,7 @@ export const suggestions: Suggestion[] = [
 6. In the frontend, if a result is returned from the polling endpoint, check if it matches the user's choice. If so, show some confetti and "You guessed correctly! Enjoy the 42 sats!", otherwise show "you guessed incorrectly".`,
   },
   {
+    icon: LinkIcon,
     title: "Top Paid Link",
     hasBackend: true,
     prompt: `Make a page with a big button which will open a link in a new tab. The default link is "https://example.com" if no-one has paid for a link yet. Otherwise, it will use the latest paid link. The latest paid link should be hidden. The only way for the user to know the link is by clicking on the button.
@@ -61,6 +81,7 @@ To generate the invoice that needs to be paid by the user, use NWC.
 The backend should store a list of submitted links.`,
   },
   {
+    icon: DropletIcon,
     title: "Lightning Faucet",
     hasBackend: true,
     prompt: `Make a "Lightning Faucet" app which allows the user to connect their wallet, generate an invoice of exactly 21 sats and the faucet backend will pay it using NWC.

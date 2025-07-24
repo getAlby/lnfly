@@ -1,7 +1,20 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { getAppViewUrl } from "@/lib/utils";
 import { launchPaymentModal } from "@getalby/bitcoin-connect-react"; // Import Bitcoin Connect
+import {
+  EyeIcon,
+  GitForkIcon,
+  SettingsIcon,
+  SparklesIcon,
+  ZapIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react"; // Added useRef
 import { toast } from "sonner"; // Import toast for notifications
 import ZapModal from "./ZapModal"; // Import the ZapModal component
@@ -30,6 +43,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
   const [isZapModalOpen, setIsZapModalOpen] = useState(false);
   const [selectedAppForZap, setSelectedAppForZap] = useState<App | null>(null);
   const [isZapping, setIsZapping] = useState(false); // Loading state for zap process
+  const [viewAll, setViewAll] = useState(false);
 
   // Ref to store the interval ID for clearing later
   const paymentCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -229,46 +243,66 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
   }
 
   return (
-    <div className="mt-32 w-full max-w-lg">
+    <div className="mt-16 w-full sm:px-20">
       {" "}
       {/* Added margin-top and width */}
-      <h2 className="text-2xl font-bold mb-4">Explore Apps</h2>{" "}
+      <div className="mb-8 flex justify-between items-center">
+        <div className="flex items-center gap-2 w-full">
+          <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center">
+            <span className="text-black font-bold text-lg">
+              <SparklesIcon className="w-4 h-4" />
+            </span>
+          </div>
+          <span className="text-xl font-bold">Explore Apps</span>
+        </div>
+        {
+          <Button
+            variant="outline"
+            className="text-primary !border-[#ffdf6f]"
+            onClick={() => setViewAll(!viewAll)}
+          >
+            View all
+          </Button>
+        }
+      </div>
       {/* Title outside the card */}
       {completedApps.length === 0 && (
         <div className="text-muted-foreground">No completed apps found.</div>
       )}
-      <ul className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full">
         {" "}
         {/* Added space between card items */}
-        {completedApps.map((app) => (
-          <li key={app.id}>
-            <Card>
-              <CardHeader>
-                <CardTitle>{app.title || "Untitled App"}</CardTitle>
-              </CardHeader>
-              {/* Each app is a card */}
-              <CardContent className="flex flex-col">
+        {completedApps.slice(0, viewAll ? undefined : 6).map((app) => (
+          <Card key={app.id} className="border-white/10">
+            <CardHeader>
+              <CardTitle className="text-2xl truncate">
+                {app.title || "Untitled App"}
+              </CardTitle>
+            </CardHeader>
+            {/* Each app is a card */}
+            <CardContent className="flex-1 flex flex-col items-center justify-end">
+              {" "}
+              {/* Changed to flex-col */}
+              <span
+                className="text-sm mb-4 overflow-hidden text-ellipsis text-gray-200"
+                style={{
+                  display: "-webkit-box",
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: "vertical",
+                }}
+              >
                 {" "}
-                {/* Changed to flex-col */}
-                <span
-                  className="text-sm mb-4 overflow-hidden text-ellipsis text-muted-foreground"
-                  style={{
-                    display: "-webkit-box",
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: "vertical",
-                  }}
-                >
-                  {" "}
-                  {/* Smaller text, truncate prompt to 3 lines, added mb-4 */}
-                  {app.prompt}
-                </span>
-                <div className="flex gap-2 justify-end items-center">
-                  {" "}
-                  {/* Right-align buttons */}
+                {/* Smaller text, truncate prompt to 3 lines, added mb-4 */}
+                {app.prompt}
+              </span>
+            </CardContent>
+            <CardFooter>
+              <div className="flex gap-2 justify-between items-center w-full">
+                <div className="flex gap-2 items-center">
                   {window.localStorage.getItem(`app_${app.id}_editKey`) && (
                     <a href={`/apps/${app.id}`} target="_blank">
                       <Button size="sm" variant="destructive">
-                        Manage
+                        <SettingsIcon className="w-4 h-4" /> Manage
                       </Button>
                     </a>
                   )}
@@ -276,36 +310,43 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
                     href={getAppViewUrl(app.id, app.subdomain)}
                     target="_blank"
                   >
-                    <Button size="sm">View</Button>
+                    <Button className="bg-gradient-primary" size="sm">
+                      <EyeIcon className="w-4 h-4" /> View
+                    </Button>
                   </a>
                   <Button
                     size="sm"
-                    variant="secondary"
+                    variant="outline"
                     onClick={() => handleFork(app.prompt)}
                   >
-                    Fork
-                  </Button>
-                  {/* Zap Button */}
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setSelectedAppForZap(app);
-                      setIsZapModalOpen(true);
-                    }}
-                    className="bg-yellow-800"
-                    disabled={isZapping} // Disable button while processing
-                  >
-                    {isZapping && selectedAppForZap?.id === app.id
-                      ? "Zapping..."
-                      : `⚡ ${app.zapAmount || 0}`}
-                    {/* Display zap amount if available and non-zero */}
+                    <GitForkIcon className="w-4 h-4" /> Fork
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </li>
+                {/* Zap Button */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSelectedAppForZap(app);
+                    setIsZapModalOpen(true);
+                  }}
+                  disabled={isZapping} // Disable button while processing
+                  className="text-primary font-semibold"
+                >
+                  {isZapping && selectedAppForZap?.id === app.id ? (
+                    "Zapping..."
+                  ) : (
+                    <>
+                      <ZapIcon className="w-3 h-3 -mr-0.5" />{" "}
+                      {app.zapAmount || 0}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardFooter>
+          </Card>
         ))}
-      </ul>
+      </div>
       {/* Render the Zap Modal */}
       {selectedAppForZap && (
         <ZapModal

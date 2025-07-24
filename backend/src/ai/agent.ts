@@ -8,7 +8,8 @@ import {
 
 const openRouterApiKey = process.env.OPENROUTER_API_KEY;
 //const geminiApiKey = process.env.GEMINI_API_KEY;
-const defaultModel = "deepseek/deepseek-chat:free";
+//const defaultModel = "deepseek/deepseek-chat:free";
+export const defaultModel = "qwen/qwen3-coder:free";
 
 // Helper function to get the chat model instance
 const getChatModel = (modelName: string | undefined): LanguageModelV1 => {
