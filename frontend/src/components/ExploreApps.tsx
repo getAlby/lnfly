@@ -275,7 +275,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
         {completedApps.slice(0, viewAll ? undefined : 6).map((app) => (
           <Card key={app.id} className="border-white/10">
             <CardHeader>
-              <CardTitle className="text-2xl truncate">
+              <CardTitle className="text-2xl truncate break-words">
                 {app.title || "Untitled App"}
               </CardTitle>
             </CardHeader>
@@ -284,7 +284,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
               {" "}
               {/* Changed to flex-col */}
               <span
-                className="text-sm mb-4 overflow-hidden text-ellipsis text-gray-200"
+                className="text-sm mb-4 overflow-hidden text-ellipsis text-gray-200 break-words"
                 style={{
                   display: "-webkit-box",
                   WebkitLineClamp: 3,
