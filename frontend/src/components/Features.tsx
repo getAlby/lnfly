@@ -1,21 +1,23 @@
-import { Code, Wallet, Zap } from "lucide-react";
+import { Rocket, Wallet, Zap } from "lucide-react";
 
 const features = [
   {
     icon: Zap,
-    title: "1-Click Deployment",
+    title: "Lightning Fast Development",
     description:
       "Generate Lightning Network apps in seconds with AI-powered prototyping",
   },
   {
-    icon: Code,
-    title: "Ready to Deploy",
-    description: "Get production-ready code that you can fork and customize",
+    icon: Rocket,
+    title: "1-Click Deployment",
+    description:
+      "Deploy your app directly on LNFly. Copy the code to continue building your app",
   },
   {
     icon: Wallet,
-    title: "Made for Lightning",
-    description: "Built for the Lightning Network with native Bitcoin payments",
+    title: "Build and Earn",
+    description:
+      "Receive payments directly to your lightning wallet from users who spend in your app",
   },
 ];
 
