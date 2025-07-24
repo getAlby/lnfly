@@ -1,4 +1,4 @@
-import LNFlyHeading from "@/components/LNFlyHeading"; // Import LNFlyHeading
+import Header from "@/components/Header"; // Import LNFlyHeading
 import { Badge } from "@/components/ui/badge"; // Import Badge
 import { Button } from "@/components/ui/button"; // Import Button
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
@@ -68,11 +68,12 @@ interface AppData {
 const POLLING_INTERVAL = 3000; // Poll every 3 seconds
 const AVAILABLE_MODELS = [
   "deepseek/deepseek-chat:free",
+  "qwen/qwen3-coder:free",
   "google/gemini-2.5-pro-preview",
   "openai/gpt-4.1",
   "anthropic/claude-sonnet-4",
   "meta-llama/llama-4-maverick",
-  "x-ai/grok-3-beta",
+  "x-ai/grok-4",
 ];
 
 function AppStatusPage() {
@@ -818,9 +819,9 @@ function AppStatusPage() {
 
   return (
     <div className="font-sans flex flex-col items-center min-h-screen py-8 px-4">
-      <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
-        <LNFlyHeading />
-        <div className="container mx-auto p-4 max-w-2xl">
+      <main className="flex-1 w-full flex-grow flex flex-col items-center justify-start">
+        <Header />
+        <div className="container mx-auto p-4 mt-8 max-w-2xl">
           {" "}
           {/* Center content */}
           <Card>

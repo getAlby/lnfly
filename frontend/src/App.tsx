@@ -1,14 +1,11 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
-import Logo from "./assets/logo.svg";
 
 import ExploreApps from "@/components/ExploreApps"; // Import the new component
-import LNFlyHeading from "@/components/LNFlyHeading"; // Import the new component
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { LoadingButton } from "@/components/ui/loading-button";
-import { Textarea } from "@/components/ui/textarea";
-import { suggestions } from "@/lib/suggestions";
+import { Features } from "@/components/Features";
+import { Footer } from "@/components/Footer";
+import Header from "@/components/Header"; // Import the new component
+import { Hero } from "@/components/Hero";
 
 function App() {
   const [prompt, setPrompt] = useState("");
@@ -77,59 +74,14 @@ function App() {
 
   return (
     <div className="font-sans flex flex-col items-center min-h-screen py-8 px-4">
-      <img
-        src={Logo}
-        alt="LNFly Logo"
-        className="w-screen h-screen object-cover fixed top-0 left-0 -z-10 opacity-15 object-center "
-      />
+      <Header />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
-        {/* Add the heading here */}
-        <LNFlyHeading />
-        {/* Added heading */}
-        {/* Form is now always visible */}
-        <div className="w-full max-w-lg">
-          <Card className="w-full">
-            <CardContent>
-              <form
-                onSubmit={handleSubmit}
-                className="flex w-full max-w-md gap-2 items-end pt-6" // Added pt-6 for padding
-              >
-                <Textarea
-                  placeholder="Enter prompt to generate an app..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="max-h-64"
-                  disabled={isLoading}
-                  required
-                />
-                <LoadingButton
-                  type="submit"
-                  loading={isLoading}
-                  className="h-16"
-                >
-                  Generate
-                </LoadingButton>
-              </form>
-              {/* Keep example button */}
-              {!isLoading && (
-                <div className="mt-4 flex gap-2 flex-wrap">
-                  {suggestions.map((suggestion) => (
-                    <Button
-                      key={suggestion.title}
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => {
-                        setPrompt(suggestion.prompt);
-                      }}
-                    >
-                      {suggestion.title}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <Hero
+          handleSubmit={handleSubmit}
+          isLoading={isLoading}
+          prompt={prompt}
+          setPrompt={setPrompt}
+        />
         {/* Error display */}
         {error && (
           <div className="text-red-500 bg-red-100 border border-red-400 rounded p-3 mt-4 w-full max-w-md">
@@ -142,7 +94,9 @@ function App() {
         {/* Add the ExploreApps component here */}
         <ExploreApps onFork={setPrompt} />{" "}
         {/* Pass setPrompt as the onFork prop */}
+        <Features />
       </main>
+      <Footer />
     </div>
   );
 }
