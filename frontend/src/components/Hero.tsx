@@ -1,8 +1,8 @@
 import Title from "@/assets/title.svg";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { LoadingButton } from "@/components/ui/loading-button";
+import { Textarea } from "@/components/ui/textarea";
 import { suggestions } from "@/lib/suggestions";
 import { ArrowRightIcon, CodeIcon, SparklesIcon } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -42,20 +42,23 @@ export function Hero({
         onSubmit={handleSubmit}
         className="flex w-full gap-2 items-end pt-6" // Added pt-6 for padding
       >
-        <div className="flex w-full gap-2">
-          <Input
+        <div className="flex flex-col w-full border-2 rounded-2xl pr-2 pb-2">
+          <Textarea
+            autoFocus
             placeholder="Enter prompt to generate an app..."
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            className="flex-1 text-white placeholder:text-gray-400"
+            className="flex-1 text-white placeholder:text-gray-400 border-0 !bg-transparent !ring-0 resize-none"
           />
-          <LoadingButton
-            type="submit"
-            loading={isLoading}
-            className="bg-gradient-primary"
-          >
-            <CodeIcon className="w-4 h-4 mr-2" /> Generate
-          </LoadingButton>
+          <div className="flex justify-end">
+            <LoadingButton
+              type="submit"
+              loading={isLoading}
+              className="bg-gradient-primary"
+            >
+              <CodeIcon className="w-4 h-4 mr-2" /> Generate
+            </LoadingButton>
+          </div>
         </div>
       </form>
 
