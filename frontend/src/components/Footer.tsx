@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 export function Footer() {
   return (
-    <footer className="sm:px-20 w-full mt-32 mb-12 flex flex-col items-center">
+    <footer className="sm:px-20 w-full mt-28 mb-12 flex flex-col items-center">
       <div className="px-8">
         <img src={FooterSvg} />
       </div>

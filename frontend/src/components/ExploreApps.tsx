@@ -269,7 +269,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
       {completedApps.length === 0 && (
         <div className="text-muted-foreground">No completed apps found.</div>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 w-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-8 w-full">
         {" "}
         {/* Added space between card items */}
         {completedApps.slice(0, viewAll ? undefined : 6).map((app) => (
@@ -298,7 +298,7 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
               </span>
             </CardContent>
             <CardFooter>
-              <div className="flex gap-2 justify-between items-center w-full">
+              <div className="flex gap-2 justify-between items-center w-full flex-wrap">
                 <div className="flex gap-2 items-center">
                   {window.localStorage.getItem(`app_${app.id}_editKey`) && (
                     <a href={`/apps/${app.id}`} target="_blank">
