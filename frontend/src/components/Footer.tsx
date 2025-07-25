@@ -3,13 +3,13 @@ import { Link } from "react-router-dom";
 
 export function Footer() {
   return (
-    <footer className="sm:px-20 w-full mt-32">
+    <footer className="sm:px-20 w-full mt-32 mb-12">
       <div className="px-8">
         <img src={FooterSvg} />
       </div>
       <div className="border-t border-gray-900 flex flex-col w-full" />
 
-      <p className="text-gray-400 text-sm mt-4">
+      <p className="text-gray-400 text-sm py-4">
         Built with ⚡ by{" "}
         <Link
           to="https://getalby.com"

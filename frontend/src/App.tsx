@@ -73,7 +73,7 @@ function App() {
   };
 
   return (
-    <div className="font-sans flex flex-col items-center min-h-screen py-8 px-4">
+    <div className="font-sans flex flex-col items-center min-h-screen px-4">
       <Header />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
         <Hero
