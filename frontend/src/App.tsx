@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom"; // Import useNavigate
 
+import { Constellation } from "@/components/Constellation";
 import ExploreApps from "@/components/ExploreApps"; // Import the new component
 import { Features } from "@/components/Features";
 import { Footer } from "@/components/Footer";
@@ -74,6 +75,7 @@ function App() {
 
   return (
     <div className="font-sans flex flex-col items-center min-h-screen px-4">
+      <Constellation />
       <Header />
       <main className="flex-1 w-full flex-grow flex flex-col items-center justify-center">
         <Hero

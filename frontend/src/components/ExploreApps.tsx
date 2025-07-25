@@ -273,7 +273,10 @@ function ExploreApps({ onFork }: ExploreAppsProps) {
         {" "}
         {/* Added space between card items */}
         {completedApps.slice(0, viewAll ? undefined : 6).map((app) => (
-          <Card key={app.id} className="border-white/10">
+          <Card
+            key={app.id}
+            className="border-white/10 bg-transparent backdrop-blur-xs"
+          >
             <CardHeader>
               <CardTitle className="text-2xl truncate break-all">
                 {app.title || "Untitled App"}

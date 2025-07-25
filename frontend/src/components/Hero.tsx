@@ -42,7 +42,7 @@ export function Hero({
         onSubmit={handleSubmit}
         className="flex w-full gap-2 items-end pt-6" // Added pt-6 for padding
       >
-        <div className="flex flex-col w-full border-2 rounded-2xl pr-2 pb-2">
+        <div className="flex flex-col w-full border-2 rounded-2xl pr-2 pb-2 backdrop-blur-xs">
           <Textarea
             autoFocus
             placeholder="Enter prompt to generate an app..."
@@ -71,7 +71,7 @@ export function Hero({
                 size="sm"
                 key={index}
                 variant="outline"
-                className="rounded-full py-0 text-xs"
+                className="rounded-full py-0 text-xs backdrop-blur-xs"
                 onClick={() => {
                   setPrompt(suggestion.prompt);
                 }}
