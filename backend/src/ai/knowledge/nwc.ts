@@ -7,7 +7,7 @@ export const knowledgeNWC = {
 You know how to use Nostr Wallet Connect (NWC/NIP-47) to interact with a wallet.
 Please note NWC uses millisats unit (1 sat/satoshi = 1000 millisats). Here is how to use NWC:
 
-import {nwc} from "https://esm.sh/@getalby/sdk"
+import {nwc} from "https://esm.sh/@getalby/sdk@^5.0"
 
 const nwcClient = new nwc.NWCClient({
 nostrWalletConnectUrl: "nostr+walletconnect://...", // set the NWC URL here

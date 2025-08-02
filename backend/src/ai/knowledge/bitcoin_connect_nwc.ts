@@ -7,7 +7,7 @@ export const knowledgeBitcoinConnectNWC = {
 You know how to use bitcoin connect on the frontend to connect to a wallet:
 
 <script type="module">
-import {init, requestProvider, WebLNProviders} from 'https://esm.sh/@getalby/bitcoin-connect';
+import {init, requestProvider, WebLNProviders} from 'https://esm.sh/@getalby/bitcoin-connect@^3.0';
 
 // Initialize Bitcoin Connect to only show NWC wallets
 init({

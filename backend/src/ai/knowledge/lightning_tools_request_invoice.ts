@@ -6,7 +6,7 @@ export const knowledgeLightningToolsRequestInvoice = {
 You know how to use lightning tools to generate a lightning invoice for a lightning address and check if it was paid:
 
 <script type="module">
-import { LightningAddress, Invoice } from "https://esm.sh/@getalby/lightning-tools";
+import { LightningAddress, Invoice } from "https://esm.sh/@getalby/lightning-tools@^5.0";
 
 const ln = new LightningAddress("example@getalby.com");
 
